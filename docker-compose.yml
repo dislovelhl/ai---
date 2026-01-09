@@ -1,0 +1,177 @@
+# AI Navigation Platform - Docker Infrastructure
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ainav
+      POSTGRES_PASSWORD: ainavpassword
+      POSTGRES_DB: ainav_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ainav -d ainav_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    environment:
+      MEILI_MASTER_KEY: masterKey
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  content-service:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/content-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      REDIS_URL: redis://redis:6379/0
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./ainav-backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  search-service:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/search-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    ports:
+      - "8002:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    volumes:
+      - ./ainav-backend:/app
+
+  user-service:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/user-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8003:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./ainav-backend:/app
+
+  automation-service:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/automation-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      REDIS_URL: redis://redis:6379/0
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./ainav-backend:/app
+
+  celery-worker:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/automation-service/Dockerfile
+    command: celery -A services.automation-service.app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      REDIS_URL: redis://redis:6379/0
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./ainav-backend:/app
+
+  celery-beat:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/automation-service/Dockerfile
+    command: celery -A services.automation-service.app.celery_app beat --loglevel=info
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./ainav-backend:/app
+
+  frontend:
+    build:
+      context: ./ainav-web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8001/v1
+      NEXT_PUBLIC_SEARCH_API: http://localhost:8002/v1
+      NEXT_PUBLIC_USER_API: http://localhost:8003/v1
+    depends_on:
+      - content-service
+    volumes:
+      - ./ainav-web:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
+  redis_data:
+  meili_data:
