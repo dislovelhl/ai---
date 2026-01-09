@@ -1,0 +1,347 @@
+{
+  "project": {
+    "name": "AI Navigator Platform",
+    "description": "中国AI生态导航与认知中枢平台",
+    "generated_at": "2026-01-09T12:00:00Z",
+    "version": "1.0.0"
+  },
+  "structure": {
+    "directories": [
+      {
+        "name": "ainav-backend",
+        "description": "Python FastAPI microservices backend",
+        "subdirectories": [
+          "services/automation-service",
+          "services/content-service",
+          "services/search-service",
+          "services/user-service",
+          "shared",
+          "tests"
+        ]
+      },
+      {
+        "name": "ainav-web",
+        "description": "Next.js React frontend",
+        "subdirectories": [
+          "src/app",
+          "src/components",
+          "src/lib"
+        ]
+      },
+      {
+        "name": "design-specs",
+        "description": "Architecture & design documentation"
+      }
+    ]
+  },
+  "entry_points": {
+    "backend": [
+      {
+        "service": "automation-service",
+        "path": "ainav-backend/services/automation-service/app/main.py",
+        "description": "Content crawling and automation pipelines",
+        "port": 8004
+      },
+      {
+        "service": "content-service",
+        "path": "ainav-backend/services/content-service/app/main.py",
+        "description": "Tool CRUD and category management",
+        "port": 8001
+      },
+      {
+        "service": "search-service",
+        "path": "ainav-backend/services/search-service/app/main.py",
+        "description": "Full-text and vector search APIs",
+        "port": 8002
+      },
+      {
+        "service": "user-service",
+        "path": "ainav-backend/services/user-service/app/main.py",
+        "description": "Authentication and user management",
+        "port": 8003
+      }
+    ],
+    "frontend": [
+      {
+        "name": "main-app",
+        "path": "ainav-web/src/app/page.tsx",
+        "description": "Homepage with tool discovery and search"
+      },
+      {
+        "name": "layout",
+        "path": "ainav-web/src/app/layout.tsx",
+        "description": "Root layout with providers and navigation"
+      }
+    ],
+    "infrastructure": [
+      {
+        "name": "docker-compose",
+        "path": "docker-compose.yml",
+        "description": "Multi-service container orchestration"
+      }
+    ]
+  },
+  "core_modules": {
+    "backend": [
+      {
+        "name": "automation-service",
+        "path": "ainav-backend/services/automation-service/",
+        "exports": ["Crawl tasks", "Enrichment pipelines", "Celery workers"],
+        "purpose": "Automated content discovery from Product Hunt, GitHub, ArXiv",
+        "key_files": [
+          "app/main.py",
+          "app/workers/tasks.py",
+          "app/clients/"
+        ]
+      },
+      {
+        "name": "content-service",
+        "path": "ainav-backend/services/content-service/",
+        "exports": ["Tool CRUD", "Category management", "Scenario handling"],
+        "purpose": "Core content management APIs for AI tools catalog",
+        "key_files": [
+          "app/routers/tools.py",
+          "app/routers/categories.py"
+        ]
+      },
+      {
+        "name": "search-service",
+        "path": "ainav-backend/services/search-service/",
+        "exports": ["Full-text search", "Vector search", "Autocomplete"],
+        "purpose": "Search infrastructure using Meilisearch and embeddings",
+        "key_files": [
+          "app/routers/search.py"
+        ]
+      },
+      {
+        "name": "user-service",
+        "path": "ainav-backend/services/user-service/",
+        "exports": ["Authentication", "User profiles", "Collections"],
+        "purpose": "User management and authentication services",
+        "key_files": [
+          "app/routers/auth.py",
+          "app/routers/users.py"
+        ]
+      },
+      {
+        "name": "shared",
+        "path": "ainav-backend/shared/",
+        "exports": ["Database models", "Configuration", "Utilities"],
+        "purpose": "Common code shared across all backend services",
+        "key_files": [
+          "models.py",
+          "database.py",
+          "config.py"
+        ]
+      }
+    ],
+    "frontend": [
+      {
+        "name": "app-pages",
+        "path": "ainav-web/src/app/",
+        "exports": ["Page components", "API routes"],
+        "purpose": "Next.js app router pages and server components",
+        "key_files": [
+          "page.tsx",
+          "tools/page.tsx",
+          "scenarios/[slug]/page.tsx"
+        ]
+      },
+      {
+        "name": "components",
+        "path": "ainav-web/src/components/",
+        "exports": ["Reusable React components"],
+        "purpose": "UI component library built with shadcn/ui",
+        "key_files": [
+          "layout/navbar.tsx",
+          "tools/tool-card.tsx",
+          "ui/"
+        ]
+      },
+      {
+        "name": "lib",
+        "path": "ainav-web/src/lib/",
+        "exports": ["API clients", "Utilities", "Type definitions"],
+        "purpose": "Frontend utilities and external service integrations",
+        "key_files": [
+          "api.ts",
+          "utils.ts",
+          "types.ts"
+        ]
+      }
+    ]
+  },
+  "configuration": {
+    "environment": [
+      {
+        "name": "backend-config",
+        "path": "ainav-backend/shared/config.py",
+        "description": "Pydantic-based settings management"
+      },
+      {
+        "name": "docker-compose",
+        "path": "docker-compose.yml",
+        "description": "Multi-service orchestration with health checks"
+      },
+      {
+        "name": "frontend-config",
+        "path": "ainav-web/next.config.ts",
+        "description": "Next.js build and runtime configuration"
+      }
+    ],
+    "packages": [
+      {
+        "name": "frontend",
+        "path": "ainav-web/package.json",
+        "description": "React/Next.js dependencies",
+        "count": 29
+      },
+      {
+        "name": "backend",
+        "path": "ainav-backend/requirements.txt",
+        "description": "Python dependencies",
+        "count": 21
+      }
+    ],
+    "development_tools": [
+      {
+        "category": "frontend",
+        "tools": ["ESLint", "TypeScript", "Tailwind CSS 4.0"]
+      },
+      {
+        "category": "backend",
+        "tools": ["Alembic migrations", "pytest framework"]
+      },
+      {
+        "category": "container",
+        "tools": ["Docker multi-stage builds"]
+      }
+    ]
+  },
+  "documentation": {
+    "architecture": [
+      {
+        "title": "System Architecture",
+        "path": "design-specs/system-architecture.md",
+        "description": "Comprehensive technical architecture",
+        "lines": 670
+      },
+      {
+        "title": "API Specification",
+        "path": "design-specs/api-specification.md",
+        "description": "API design and endpoints"
+      },
+      {
+        "title": "Database Schema",
+        "path": "design-specs/database-schema.md",
+        "description": "Data model specifications"
+      },
+      {
+        "title": "Frontend Architecture",
+        "path": "design-specs/frontend-architecture.md",
+        "description": "React/Next.js design patterns"
+      },
+      {
+        "title": "Content Automation",
+        "path": "design-specs/content-automation-pipeline.md",
+        "description": "Crawling and enrichment pipelines"
+      },
+      {
+        "title": "Infrastructure",
+        "path": "design-specs/infrastructure-deployment.md",
+        "description": "Deployment and scaling strategy"
+      }
+    ],
+    "code": [
+      {
+        "title": "Frontend README",
+        "path": "ainav-web/README.md",
+        "description": "Frontend setup and development guide"
+      }
+    ]
+  },
+  "testing": {
+    "backend": {
+      "test_files": 5,
+      "location": "ainav-backend/tests/",
+      "coverage": [
+        "test_automation.py",
+        "test_content_crud.py",
+        "test_github_client.py",
+        "verify_user_service.py",
+        "insert_test_tool.py"
+      ],
+      "framework": "pytest with async support"
+    },
+    "infrastructure": {
+      "database_testing": "test_db.py",
+      "coverage": "Unit tests for core business logic and API endpoints"
+    }
+  },
+  "dependencies": {
+    "frontend": {
+      "framework": "Next.js 16.1.1 (App Router, React 19.2.3)",
+      "styling": "Tailwind CSS 4.0, shadcn/ui components",
+      "state": "TanStack Query 5.62.7, Zustand 5.0.2",
+      "ui": "Radix UI primitives, Lucide React icons",
+      "forms": "React Hook Form 7.54.1 with Zod validation",
+      "typescript": "Full type coverage with strict mode"
+    },
+    "backend": {
+      "api": "FastAPI 0.115.6 with automatic OpenAPI docs",
+      "database": "SQLAlchemy 2.0.36 async ORM, PostgreSQL with pgvector",
+      "queue": "Celery 5.4.0 with Redis 5.2.1 backend",
+      "search": "Meilisearch 0.31.2 for full-text search",
+      "auth": "JWT tokens with bcrypt password hashing",
+      "http": "httpx 0.28.1 for external API calls",
+      "ml": "sentence-transformers 3.3.1 for content embeddings"
+    },
+    "infrastructure": {
+      "database": "PostgreSQL 16 with pgvector extension",
+      "cache": "Redis 7-alpine for session and task queue storage",
+      "search_engine": "Meilisearch v1.12 for fast, typo-tolerant search",
+      "container": "Docker with multi-stage builds",
+      "proxy": "Nginx load balancer (implied in architecture)"
+    }
+  },
+  "quick_start": {
+    "setup_steps": [
+      "Clone and navigate: cd /path/to/ai-navigator",
+      "Start services: docker-compose up -d",
+      "Install frontend deps: cd ainav-web && npm install",
+      "Start frontend: npm run dev (runs on port 3000)",
+      "Verify backend: Check service health endpoints (ports 8001-8004)"
+    ],
+    "key_urls": {
+      "frontend": "http://localhost:3000",
+      "content_api": "http://localhost:8001/v1",
+      "search_api": "http://localhost:8002/v1/search",
+      "user_api": "http://localhost:8003/v1",
+      "automation_api": "http://localhost:8004"
+    },
+    "development_workflow": [
+      "Backend changes: Services auto-reload in Docker containers",
+      "Frontend changes: Hot reload with Next.js dev server",
+      "Database migrations: alembic upgrade head in backend container",
+      "Testing: pytest in backend services, npm test in frontend"
+    ]
+  },
+  "metadata": {
+    "token_efficiency": {
+      "index_tokens": 3000,
+      "full_repo_tokens": 58000,
+      "reduction_percentage": 94,
+      "description": "This index reduces repository reading from ~58K tokens to ~3K tokens"
+    },
+    "file_counts": {
+      "python_files": 37,
+      "typescript_files": 26,
+      "documentation_files": 7,
+      "config_files": 5,
+      "docker_files": 5,
+      "test_files": 5
+    },
+    "architecture_type": "Microservices",
+    "tech_stack_complexity": "High (Full-stack with ML integrations)"
+  }
+}

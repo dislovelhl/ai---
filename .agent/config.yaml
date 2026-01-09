@@ -1,0 +1,112 @@
+# AI Navigation Platform - Agent Configuration
+# Project: 2026中国AI生态导航平台
+# Version: 1.0.0
+
+project:
+  name: "AI导航平台"
+  name_en: "AI Navigation Platform"
+  description: "下一代智能AI工具导航与认知中枢"
+  version: "0.1.0"
+
+directories:
+  frontend: "ainav-web"
+  backend: "ainav-backend"
+  design: "design-specs"
+  docs: "docs"
+
+tech_stack:
+  frontend:
+    framework: "Next.js 14+"
+    language: "TypeScript"
+    styling: "Tailwind CSS"
+    ui: "shadcn/ui"
+    state: "Zustand + TanStack Query"
+
+  backend:
+    framework: "FastAPI"
+    language: "Python 3.11+"
+    orm: "SQLAlchemy 2.0"
+    task_queue: "Celery + Redis"
+
+  database:
+    primary: "PostgreSQL 16"
+    vector: "pgvector"
+    search: "Meilisearch"
+    cache: "Redis"
+
+  ai:
+    embeddings: "BGE-M3"
+    llm: "DeepSeek API"
+
+  infrastructure:
+    hosting: "Aliyun Hong Kong"
+    cdn: "Cloudflare + 七牛云"
+    container: "Docker + Docker Compose"
+
+conventions:
+  # Code style
+  indent: 2
+  quotes: "double"
+  semicolons: false
+
+  # Naming conventions
+  components: "PascalCase"
+  functions: "camelCase"
+  python_functions: "snake_case"
+  database_tables: "snake_case"
+  api_endpoints: "kebab-case"
+
+  # Git conventions
+  branch_prefix:
+    feature: "feat/"
+    bugfix: "fix/"
+    hotfix: "hotfix/"
+    release: "release/"
+  commit_types:
+    - "feat"
+    - "fix"
+    - "docs"
+    - "style"
+    - "refactor"
+    - "test"
+    - "chore"
+
+environments:
+  development:
+    frontend_url: "http://localhost:3000"
+    backend_url: "http://localhost:8000"
+    database_url: "postgresql://postgres:postgres@localhost:5432/ainav"
+    redis_url: "redis://localhost:6379"
+
+  staging:
+    frontend_url: "https://staging.ainav.com"
+    backend_url: "https://api.staging.ainav.com"
+
+  production:
+    frontend_url: "https://ainav.com"
+    backend_url: "https://api.ainav.com"
+
+commands:
+  dev: "Start development servers"
+  build: "Build for production"
+  test: "Run tests"
+  lint: "Run linters"
+  db: "Database operations"
+  crawl: "Content crawling"
+  deploy: "Deployment operations"
+
+workflows:
+  - new-feature
+  - add-tool
+  - content-pipeline
+  - api-endpoint
+  - database-migration
+  - deployment
+
+skills:
+  - frontend-dev
+  - backend-dev
+  - database-ops
+  - content-automation
+  - seo-optimization
+  - performance-tuning
