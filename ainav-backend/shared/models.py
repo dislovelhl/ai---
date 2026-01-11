@@ -16,6 +16,21 @@ class UserTier(str, enum.Enum):
     ENTERPRISE = "enterprise"
 
 
+class UserRole(str, enum.Enum):
+    """User role enum for authorization"""
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    USER = "user"
+
+
+class ModerationStatus(str, enum.Enum):
+    """Moderation status for submitted content"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    FLAGGED = "flagged"
+
+
 class TimestampMixin:
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -40,6 +55,11 @@ class User(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     user_tier = Column(Enum(UserTier), default=UserTier.FREE, nullable=False)
+
+    # Admin and authorization fields
+    is_admin = Column(Boolean, default=False)
+    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    permissions = Column(ARRAY(String), default=list)  # Flexible permissions array
 
     # OAuth provider IDs
     github_id = Column(String(50), unique=True, index=True, nullable=True)
@@ -251,20 +271,81 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class ModerationQueue(Base, TimestampMixin):
+    """
+    Tracks user-submitted content pending admin review.
+    Used for workflows shared publicly, tool suggestions, etc.
+    """
+    __tablename__ = "moderation_queue"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Content type and reference
+    content_type = Column(String(50), nullable=False)  # 'workflow', 'tool_suggestion', etc.
+    content_id = Column(UUID(as_uuid=True), nullable=True)  # Reference to actual content (workflow_id, etc.)
+
+    # Submission data (for tool suggestions or draft content)
+    content_data = Column(JSON, nullable=True)  # Flexible storage for submitted data
+
+    # Status
+    status = Column(Enum(ModerationStatus), default=ModerationStatus.PENDING, nullable=False)
+
+    # People involved
+    submitter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    reviewer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    # Review details
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
+    # Relationships
+    submitter = relationship("User", foreign_keys=[submitter_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
+
+
+class AdminActivityLog(Base, TimestampMixin):
+    """
+    Audit trail for admin actions.
+    Tracks all create/update/delete operations and moderation actions.
+    """
+    __tablename__ = "admin_activity_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Admin who performed the action
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Action details
+    action_type = Column(String(50), nullable=False)  # 'create', 'update', 'delete', 'approve', 'reject'
+    resource_type = Column(String(50), nullable=False)  # 'tool', 'category', 'scenario', 'workflow', etc.
+    resource_id = Column(UUID(as_uuid=True), nullable=True)  # UUID of the affected resource
+
+    # Change tracking (JSON for flexibility)
+    old_value = Column(JSON, nullable=True)  # Previous state before the change
+    new_value = Column(JSON, nullable=True)  # New state after the change
+
+    # Additional context
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    user_agent = Column(String(255), nullable=True)
+
+    # Relationship
+    admin = relationship("User", foreign_keys=[admin_id])

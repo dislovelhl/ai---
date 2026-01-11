@@ -251,7 +251,7 @@ async def github_callback(
     # Create JWT token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     jwt_token = create_access_token(
-        data={"sub": str(user.id)},
+        data={"sub": str(user.id), "role": user.role.value},
         expires_delta=access_token_expires
     )
 
@@ -414,7 +414,7 @@ async def wechat_callback(
     # Create JWT token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     jwt_token = create_access_token(
-        data={"sub": str(user.id)},
+        data={"sub": str(user.id), "role": user.role.value},
         expires_delta=access_token_expires
     )
 

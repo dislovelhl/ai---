@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+from shared.models import UserRole
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -21,6 +22,27 @@ class UserOut(UserBase):
     id: UUID
     is_active: bool
     is_superuser: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AdminUserCreate(UserBase):
+    """Schema for creating admin/moderator accounts (admin-only)"""
+    password: str
+    role: UserRole = Field(default=UserRole.USER, description="User role (admin, moderator, user)")
+    permissions: Optional[List[str]] = Field(default=None, description="Optional permissions array")
+    is_active: bool = Field(default=True, description="Account active status")
+
+class AdminUserOut(UserBase):
+    """Admin view of user with role and permissions"""
+    id: UUID
+    is_active: bool
+    is_superuser: bool
+    is_admin: bool
+    role: UserRole
+    permissions: List[str]
     created_at: datetime
     updated_at: datetime
 
