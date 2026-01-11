@@ -108,6 +108,53 @@ def validate_token(token: str) -> bool:
         return False
 
 
+async def get_current_user_id(
+    token: str = Depends(oauth2_scheme)
+):
+    """
+    Dependency to get the current authenticated user's ID.
+
+    Lightweight alternative to get_current_user that only extracts and validates
+    the UUID from the JWT token without querying the database. Use this when you
+    only need the user ID and don't need the full User object.
+
+    Args:
+        token: JWT token from Authorization header
+
+    Returns:
+        UUID: User ID extracted from token
+
+    Raises:
+        HTTPException: If token is invalid or contains invalid UUID (401)
+
+    Example:
+        @app.post("/workflows")
+        async def create_workflow(
+            workflow: WorkflowCreate,
+            user_id: UUID = Depends(get_current_user_id)
+        ):
+            # user_id is already a UUID, no DB query needed
+            return await create_workflow_for_user(workflow, user_id)
+    """
+    from uuid import UUID
+
+    # Extract user_id from token
+    user_id_str = extract_user_id_from_token(token)
+
+    # Convert to UUID
+    try:
+        user_id = UUID(user_id_str)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Invalid UUID format in token: {user_id_str}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user_id
+
+
 async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme)
