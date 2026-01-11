@@ -3,6 +3,7 @@ import {
   Scenario,
   Tool,
   ToolCreate,
+  ToolAlternativesResponse,
   Skill,
   AgentWorkflow,
   AgentExecution,
@@ -152,6 +153,20 @@ export async function getTools(params?: {
 
 export async function getToolBySlug(slug: string): Promise<Tool> {
   return fetchAPI<Tool>(CONTENT_API, `/tools/${slug}`);
+}
+
+export async function getToolAlternatives(
+  slug: string,
+  limit?: number
+): Promise<ToolAlternativesResponse> {
+  const searchParams = new URLSearchParams();
+  if (limit) searchParams.set("limit", limit.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<ToolAlternativesResponse>(
+    CONTENT_API,
+    `/tools/${slug}/alternatives${query ? `?${query}` : ""}`
+  );
 }
 
 export async function createTool(tool: ToolCreate): Promise<Tool> {

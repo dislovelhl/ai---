@@ -243,6 +243,12 @@ export interface SearchResult {
   query: string;
 }
 
+export interface ToolAlternativesResponse {
+  alternatives: Tool[];
+  total_count: number;
+  prioritized_count: number;
+}
+
 // =============================================================================
 // FACETED SEARCH TYPES
 // =============================================================================

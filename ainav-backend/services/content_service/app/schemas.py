@@ -100,5 +100,22 @@ class ToolRead(ToolBase, TimestampSchema):
     scenarios: List[ScenarioRead] = []
     avg_rating: float = 0.0
     review_count: int = 0
-    
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ToolAlternativesResponse(BaseModel):
+    """Response schema for tool alternatives endpoint."""
+    alternatives: List[ToolRead] = Field(
+        default_factory=list,
+        description="List of alternative tools with similar functionality"
+    )
+    total_count: int = Field(
+        0,
+        description="Total number of alternatives found"
+    )
+    prioritized_count: int = Field(
+        0,
+        description="Number of China-accessible alternatives (when original requires VPN)"
+    )
+
     model_config = ConfigDict(from_attributes=True)

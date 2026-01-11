@@ -1,10 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getToolBySlug, getTools } from "@/lib/api";
+import { getToolBySlug, getTools, getToolAlternatives } from "@/lib/api";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { ToolCard } from "@/components/tools/tool-card";
+import { ToolAlternatives } from "@/components/tools/tool-alternatives";
 import { PricingBadge } from "@/components/tools/pricing-badge";
 import { AccessBadge } from "@/components/tools/access-badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,12 @@ export default function ToolDetailPage() {
         limit: 4,
       }),
     enabled: !!tool?.category?.slug,
+  });
+
+  const { data: alternatives, isLoading: alternativesLoading } = useQuery({
+    queryKey: ["tool-alternatives", slug],
+    queryFn: () => getToolAlternatives(slug),
+    enabled: !!tool,
   });
 
   if (toolLoading) {
@@ -213,6 +220,17 @@ export default function ToolDetailPage() {
                     ))}
                   </div>
                 </section>
+              )}
+
+              {/* Tool Alternatives - Only show if loading or alternatives exist */}
+              {(alternativesLoading ||
+                (alternatives?.alternatives &&
+                  alternatives.alternatives.length > 0)) && (
+                <ToolAlternatives
+                  alternatives={alternatives?.alternatives || []}
+                  isLoading={alternativesLoading}
+                  originalToolRequiresVpn={tool.requires_vpn}
+                />
               )}
             </div>
 

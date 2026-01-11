@@ -7,7 +7,7 @@ from uuid import UUID
 from shared.models import User
 from ..dependencies import get_db, get_current_user_id, get_optional_user, get_admin_user
 from ..repository import ToolRepository
-from ..schemas import ToolRead, ToolCreate, ToolUpdate
+from ..schemas import ToolRead, ToolCreate, ToolUpdate, ToolAlternativesResponse
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -43,6 +43,55 @@ async def get_tool(
         raise HTTPException(status_code=404, detail="Tool not found")
     # TODO: Add personalization logic when current_user is present
     return tool
+
+@router.get("/{slug}/alternatives", response_model=ToolAlternativesResponse)
+async def get_tool_alternatives(
+    slug: str,
+    limit: int = 5,
+    prioritize_china: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get alternative tools with similar functionality.
+
+    Finds alternatives based on:
+    - Same category (3 points)
+    - Overlapping scenarios (1 point each)
+    - China-accessible bonus (2 points if original requires VPN)
+
+    Args:
+        slug: Tool slug to find alternatives for
+        limit: Maximum number of alternatives to return (default: 5)
+        prioritize_china: Prioritize China-accessible alternatives when original requires VPN (default: True)
+
+    Returns:
+        ToolAlternativesResponse with alternatives and metadata
+    """
+    repo = ToolRepository(db)
+
+    # Get the original tool first
+    tool = await repo.get_by_slug_with_relations(slug)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    # Get alternatives using repository method
+    alternatives = await repo.get_alternatives(
+        tool_id=tool.id,
+        limit=limit,
+        prioritize_china=prioritize_china
+    )
+
+    # Calculate metadata
+    total_count = len(alternatives)
+    prioritized_count = sum(
+        1 for alt in alternatives
+        if tool.requires_vpn and alt.is_china_accessible
+    ) if prioritize_china else 0
+
+    return ToolAlternativesResponse(
+        alternatives=alternatives,
+        total_count=total_count,
+        prioritized_count=prioritized_count
+    )
 
 @router.post("/", response_model=ToolRead)
 async def create_tool(
