@@ -5,6 +5,7 @@ import { getToolBySlug, getTools, getToolAlternatives } from "@/lib/api";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { ToolCard } from "@/components/tools/tool-card";
+import { ToolAlternatives } from "@/components/tools/tool-alternatives";
 import { PricingBadge } from "@/components/tools/pricing-badge";
 import { AccessBadge } from "@/components/tools/access-badge";
 import { Button } from "@/components/ui/button";
@@ -220,6 +221,13 @@ export default function ToolDetailPage() {
                   </div>
                 </section>
               )}
+
+              {/* Tool Alternatives */}
+              <ToolAlternatives
+                alternatives={alternatives?.alternatives || []}
+                isLoading={alternativesLoading}
+                originalToolRequiresVpn={tool.requires_vpn}
+              />
             </div>
 
             {/* Right Column: Stats & Sidebar */}
