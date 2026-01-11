@@ -3,12 +3,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from pydantic import BaseModel
 
 from pydantic import UUID4
 from ..dependencies import get_db
 from ..repository import ScenarioRepository, ToolRepository
-from ..schemas import ScenarioRead, ScenarioCreate, ToolRead, ScenarioUpdate
+from ..schemas import (
+    ScenarioRead,
+    ScenarioCreate,
+    ScenarioUpdate,
+    ToolRead,
+    ToolRecommendationRead,
+    ToolCombinationRead,
+    RelatedScenarioRead
+)
 from ..utils.recommendations import (
     calculate_top_tools_by_interactions,
     find_tool_combinations,
@@ -17,31 +24,6 @@ from ..utils.recommendations import (
 from shared.models import Scenario, Tool, tool_scenarios
 
 router = APIRouter(prefix="/scenarios", tags=["scenarios"])
-
-
-# Response schemas for recommendation endpoints
-class ToolRecommendationRead(BaseModel):
-    tool: ToolRead
-    recommendation_score: float
-
-    class Config:
-        from_attributes = True
-
-
-class ToolCombinationRead(BaseModel):
-    tools: List[ToolRead]
-    co_occurrence_count: int
-
-    class Config:
-        from_attributes = True
-
-
-class RelatedScenarioRead(BaseModel):
-    scenario: ScenarioRead
-    similarity_score: float
-
-    class Config:
-        from_attributes = True
 
 
 @router.get("/", response_model=List[ScenarioRead])

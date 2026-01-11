@@ -104,5 +104,28 @@ class ToolRead(ToolBase, TimestampSchema):
     scenarios: List[ScenarioRead] = []
     avg_rating: float = 0.0
     review_count: int = 0
-    
+
+    model_config = ConfigDict(from_attributes=True)
+
+# --- Recommendation Response Schemas ---
+
+class ToolRecommendationRead(BaseModel):
+    """Response schema for tool recommendations with scoring."""
+    tool: ToolRead
+    recommendation_score: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ToolCombinationRead(BaseModel):
+    """Response schema for tool combinations that work well together."""
+    tools: List[ToolRead]
+    co_occurrence_count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RelatedScenarioRead(BaseModel):
+    """Response schema for related scenarios with similarity metrics."""
+    scenario: ScenarioRead
+    similarity_score: float
+
     model_config = ConfigDict(from_attributes=True)
