@@ -90,6 +90,36 @@ class Tool(Base, TimestampMixin):
     skills = relationship("Skill", back_populates="tool", cascade="all, delete-orphan")
 
 
+class LearningPath(Base, TimestampMixin):
+    """
+    LearningPath: Structured learning roadmaps for AI skills and tools.
+    """
+    __tablename__ = "learning_paths"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    name_zh = Column(String(255))
+    slug = Column(String(255), unique=True, index=True, nullable=False)
+    description = Column(Text)
+    description_zh = Column(Text)
+    icon = Column(String(255))
+
+    # Difficulty and time estimation
+    difficulty_level = Column(String(20), nullable=False)  # 'beginner', 'intermediate', 'advanced'
+    estimated_hours = Column(Integer)
+
+    # Categorization and ordering
+    category = Column(String(100))
+    order = Column(Integer, default=0)
+
+    # Publishing status
+    is_published = Column(Boolean, default=False)
+
+    # Learning structure (JSON arrays)
+    prerequisites = Column(JSON, default=list)  # ["Python basics", "SQL fundamentals"]
+    learning_outcomes = Column(JSON, default=list)  # ["Build REST APIs", "Deploy to cloud"]
+
+
 # =============================================================================
 # AGENTIC PLATFORM MODELS
 # =============================================================================
