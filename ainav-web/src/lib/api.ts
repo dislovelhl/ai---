@@ -11,6 +11,7 @@ import {
   WorkflowUpdate,
   ChatResponse,
   ChatMessage,
+  UsageStats,
 } from "./types";
 
 // =============================================================================
@@ -202,6 +203,13 @@ export async function register(userData: any): Promise<any> {
     method: "POST",
     body: JSON.stringify(userData),
   });
+}
+
+/**
+ * Get current user's execution usage statistics
+ */
+export async function getUserUsage(): Promise<UsageStats> {
+  return fetchAuthAPI<UsageStats>(USER_API, "/users/me/usage");
 }
 
 // =============================================================================

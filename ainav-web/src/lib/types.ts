@@ -88,6 +88,20 @@ export interface ToolCreate {
 }
 
 // =============================================================================
+// USER USAGE TYPES
+// =============================================================================
+
+export interface UsageStats {
+  limit: number;
+  used: number;
+  remaining: number;
+  reset_at: string;
+  reset_at_timestamp: number;
+  tier: string;
+  window_seconds: number;
+}
+
+// =============================================================================
 // AGENT WORKFLOW TYPES
 // =============================================================================
 
