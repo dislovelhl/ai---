@@ -59,6 +59,43 @@ class SkillResponse(SkillBase):
 
 
 # =============================================================================
+# WORKFLOW CATEGORY SCHEMAS
+# =============================================================================
+
+class WorkflowCategoryBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    name_zh: Optional[str] = Field(None, max_length=100)
+    slug: str = Field(..., max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    order: int = Field(default=0)
+
+
+class WorkflowCategoryCreate(WorkflowCategoryBase):
+    pass
+
+
+class WorkflowCategoryUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100)
+    name_zh: Optional[str] = Field(None, max_length=100)
+    slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    order: Optional[int] = None
+
+
+class WorkflowCategoryResponse(WorkflowCategoryBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# =============================================================================
 # WORKFLOW SCHEMAS
 # =============================================================================
 
@@ -242,6 +279,14 @@ class PaginatedWorkflowsResponse(BaseModel):
 
 class PaginatedExecutionsResponse(BaseModel):
     items: list[ExecutionSummary]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class PaginatedWorkflowCategoriesResponse(BaseModel):
+    items: list[WorkflowCategoryResponse]
     total: int
     page: int
     page_size: int
