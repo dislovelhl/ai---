@@ -14,6 +14,13 @@ from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
+from ..schemas import (
+    WorkflowCreate,
+    WorkflowUpdate,
+    WorkflowResponse,
+    WorkflowSummary,
+    PaginatedWorkflowsResponse,
+)
 
 router = APIRouter()
 planner = PlannerAgent()

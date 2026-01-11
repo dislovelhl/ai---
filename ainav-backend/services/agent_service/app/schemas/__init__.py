@@ -119,6 +119,7 @@ class WorkflowUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     is_public: Optional[bool] = None
     is_template: Optional[bool] = None
+    version_notes: Optional[str] = None
 
 
 class WorkflowResponse(WorkflowBase):
