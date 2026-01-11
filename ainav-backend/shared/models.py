@@ -39,6 +39,7 @@ class User(Base, TimestampMixin):
     # Relationship to agent workflows
     workflows = relationship("AgentWorkflow", back_populates="user")
     interactions = relationship("UserInteraction", back_populates="user", cascade="all, delete-orphan")
+    learning_progress = relationship("UserLearningProgress", back_populates="user", cascade="all, delete-orphan")
 
 
 class Category(Base, TimestampMixin):
@@ -121,6 +122,7 @@ class LearningPath(Base, TimestampMixin):
 
     # Relationship to modules
     modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
+    user_progress = relationship("UserLearningProgress", back_populates="learning_path", cascade="all, delete-orphan")
 
 
 class LearningPathModule(Base, TimestampMixin):
@@ -151,6 +153,30 @@ class LearningPathModule(Base, TimestampMixin):
 
     # Relationship
     learning_path = relationship("LearningPath", back_populates="modules")
+
+
+class UserLearningProgress(Base, TimestampMixin):
+    """
+    UserLearningProgress: Tracks user progress through learning paths.
+    """
+    __tablename__ = "user_learning_progress"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Progress tracking
+    status = Column(String(20), nullable=False, default="not_started")  # 'not_started', 'in_progress', 'completed'
+    progress_percentage = Column(Float, default=0.0)  # 0.0 - 100.0
+    completed_modules = Column(JSON, default=list)  # Array of module UUIDs (as strings)
+
+    # Timestamps for progress lifecycle
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="learning_progress")
+    learning_path = relationship("LearningPath", back_populates="user_progress")
 
 
 # =============================================================================
