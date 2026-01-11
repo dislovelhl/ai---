@@ -52,14 +52,17 @@ async def list_workflows(
     is_public: Optional[bool] = None,
     is_template: Optional[bool] = None,
     search: Optional[str] = None,
+    category: Optional[str] = None,
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags to filter by"),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     List agent workflows with optional filtering.
+    Supports filtering by category and tags for template discovery.
     """
     query = select(AgentWorkflow)
     count_query = select(func.count(AgentWorkflow.id))
-    
+
     # For now, if no user_id provided, show public workflows only
     if user_id:
         query = query.where(
@@ -73,15 +76,27 @@ async def list_workflows(
     else:
         query = query.where(AgentWorkflow.is_public == True)
         count_query = count_query.where(AgentWorkflow.is_public == True)
-    
+
     if is_public is not None:
         query = query.where(AgentWorkflow.is_public == is_public)
         count_query = count_query.where(AgentWorkflow.is_public == is_public)
-    
+
     if is_template is not None:
         query = query.where(AgentWorkflow.is_template == is_template)
         count_query = count_query.where(AgentWorkflow.is_template == is_template)
-    
+
+    if category:
+        query = query.where(AgentWorkflow.category == category)
+        count_query = count_query.where(AgentWorkflow.category == category)
+
+    if tags:
+        # Split comma-separated tags and filter workflows that have ANY of the provided tags
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+        if tag_list:
+            # Use PostgreSQL array overlap operator to check if workflow tags contain any of the requested tags
+            query = query.where(AgentWorkflow.tags.overlap(tag_list))
+            count_query = count_query.where(AgentWorkflow.tags.overlap(tag_list))
+
     if search:
         search_filter = f"%{search}%"
         query = query.where(
@@ -157,18 +172,32 @@ async def list_public_workflows(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     is_template: Optional[bool] = None,
+    category: Optional[str] = None,
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags to filter by"),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    List public/community workflows.
+    List public/community workflows with template filtering support.
     """
     query = select(AgentWorkflow).where(AgentWorkflow.is_public == True)
     count_query = select(func.count(AgentWorkflow.id)).where(AgentWorkflow.is_public == True)
-    
+
     if is_template is not None:
         query = query.where(AgentWorkflow.is_template == is_template)
         count_query = count_query.where(AgentWorkflow.is_template == is_template)
-    
+
+    if category:
+        query = query.where(AgentWorkflow.category == category)
+        count_query = count_query.where(AgentWorkflow.category == category)
+
+    if tags:
+        # Split comma-separated tags and filter workflows that have ANY of the provided tags
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+        if tag_list:
+            # Use PostgreSQL array overlap operator to check if workflow tags contain any of the requested tags
+            query = query.where(AgentWorkflow.tags.overlap(tag_list))
+            count_query = count_query.where(AgentWorkflow.tags.overlap(tag_list))
+
     if search:
         search_filter = f"%{search}%"
         query = query.where(
