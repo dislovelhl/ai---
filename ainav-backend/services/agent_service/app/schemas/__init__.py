@@ -230,6 +230,20 @@ class ExecutionCreate(BaseModel):
     trigger_metadata: Optional[dict[str, Any]] = None
 
 
+class ExecutionReplayRequest(BaseModel):
+    """Request to replay execution from a specific step."""
+    from_step_id: str = Field(..., description="Node ID from which to resume execution")
+
+
+class ExecutionReplayResponse(BaseModel):
+    """Response from execution replay request."""
+    new_execution_id: UUID
+    parent_execution_id: UUID
+    replayed_from_step: str
+    status: str
+    message: str
+
+
 class ExecutionResponse(BaseModel):
     id: UUID
     workflow_id: UUID
@@ -244,6 +258,8 @@ class ExecutionResponse(BaseModel):
     duration_ms: Optional[int]
     trigger_type: Optional[str]
     trigger_metadata: Optional[dict[str, Any]]
+    parent_execution_id: Optional[UUID] = None
+    replayed_from_step: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -260,6 +276,42 @@ class ExecutionSummary(BaseModel):
     token_usage: int
     trigger_type: Optional[str]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExecutionStepDetail(BaseModel):
+    """Detailed information for a single execution step."""
+    node_id: str
+    status: str  # 'pending', 'running', 'completed', 'failed'
+    input_data: Optional[Any] = None
+    output_data: Optional[Any] = None
+    error_message: Optional[str] = None
+    token_usage: Optional[dict[str, int]] = None  # {input: int, output: int, total: int}
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class ExecutionDetailsResponse(BaseModel):
+    """Detailed execution response including step-by-step execution data."""
+    id: UUID
+    workflow_id: UUID
+    user_id: UUID
+    status: str
+    input_data: Optional[dict[str, Any]]
+    output_data: Optional[dict[str, Any]]
+    error_message: Optional[str]
+    execution_steps: Optional[list[dict[str, Any]]]  # Detailed step data
+    token_usage: int
+    total_api_calls: int
+    duration_ms: Optional[int]
+    trigger_type: Optional[str]
+    trigger_metadata: Optional[dict[str, Any]]
+    parent_execution_id: Optional[UUID] = None
+    replayed_from_step: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

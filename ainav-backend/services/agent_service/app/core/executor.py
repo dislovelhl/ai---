@@ -7,9 +7,12 @@ executing LLM calls, skill invocations, and data transformations.
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from datetime import datetime, timezone
+from uuid import UUID
 import httpx
 import json
 import logging
+import gzip
+import base64
 
 from shared.config import settings
 
@@ -26,8 +29,12 @@ class NodeResult:
     output_data: Any = None
     error_message: Optional[str] = None
     duration_ms: int = 0
+    token_usage: Optional[dict] = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    checkpoint: Optional[str] = None  # Compressed state snapshot for replay
+
     def to_dict(self) -> dict:
         return {
             "node_id": self.node_id,
@@ -37,7 +44,25 @@ class NodeResult:
             "output_data": self.output_data,
             "error_message": self.error_message,
             "duration_ms": self.duration_ms,
+            "token_usage": self.token_usage,
             "timestamp": self.timestamp.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "checkpoint": self.checkpoint,
+        }
+
+    def to_execution_step(self) -> dict:
+        """Convert to execution_steps format for database storage."""
+        return {
+            "node_id": self.node_id,
+            "status": "completed" if self.status == "success" else self.status,
+            "input_data": self.input_data,
+            "output_data": self.output_data,
+            "error_message": self.error_message,
+            "token_usage": self.token_usage or {"input": 0, "output": 0, "total": 0},
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "checkpoint": self.checkpoint,
         }
 
 
@@ -46,6 +71,7 @@ class ExecutionResult:
     """Complete execution result."""
     output: Any
     logs: list[dict]
+    execution_steps: list[dict] = field(default_factory=list)
     token_usage: int = 0
     api_calls: int = 0
     success: bool = True
@@ -55,7 +81,7 @@ class ExecutionResult:
 class WorkflowExecutor:
     """
     Executes Agent Workflows from React Flow graph definitions.
-    
+
     Supports node types:
     - input: Starting point, receives initial data
     - output: Ending point, returns final data
@@ -64,51 +90,141 @@ class WorkflowExecutor:
     - transform: JavaScript-like data transformation
     - condition: Branching based on conditions
     """
-    
-    def __init__(self, graph_json: dict, llm_config: dict = None):
+
+    def __init__(self, graph_json: dict, llm_config: dict = None, execution_id: Optional[UUID] = None):
         self.nodes = {n["id"]: n for n in graph_json.get("nodes", [])}
         self.edges = graph_json.get("edges", [])
         self.llm_config = llm_config or {}
-        
+        self.execution_id = execution_id
+
         # Build adjacency for traversal
         self.outgoing: dict[str, list[str]] = {}
         self.incoming: dict[str, list[str]] = {}
-        
+
         for edge in self.edges:
             src = edge["source"]
             tgt = edge["target"]
-            
+
             if src not in self.outgoing:
                 self.outgoing[src] = []
             self.outgoing[src].append(tgt)
-            
+
             if tgt not in self.incoming:
                 self.incoming[tgt] = []
             self.incoming[tgt].append(src)
-        
+
         # Execution state
         self.results: dict[str, NodeResult] = {}
         self.token_usage = 0
         self.api_calls = 0
-    
+        self.execution_steps: list[dict] = []
+        self.initial_input = None  # Store for checkpoint replay
+
+    def _create_checkpoint(self) -> str:
+        """
+        Create a compressed state snapshot for replay capability.
+
+        Captures the current workflow state including:
+        - All node results executed so far
+        - Current execution context (token usage, API calls)
+        - Graph structure for validation
+
+        Returns:
+            Base64-encoded gzip-compressed JSON string
+        """
+        try:
+            # Build state snapshot
+            state_snapshot = {
+                "graph": {
+                    "nodes": list(self.nodes.keys()),
+                    "edges": self.edges,
+                },
+                "results": {
+                    node_id: {
+                        "node_id": result.node_id,
+                        "node_type": result.node_type,
+                        "status": result.status,
+                        "input_data": result.input_data,
+                        "output_data": result.output_data,
+                        "error_message": result.error_message,
+                        "token_usage": result.token_usage,
+                    }
+                    for node_id, result in self.results.items()
+                },
+                "context": {
+                    "token_usage": self.token_usage,
+                    "api_calls": self.api_calls,
+                    "initial_input": self.initial_input,
+                },
+                "metadata": {
+                    "checkpoint_at": datetime.now(timezone.utc).isoformat(),
+                    "nodes_executed": len(self.results),
+                }
+            }
+
+            # Serialize to JSON
+            json_data = json.dumps(state_snapshot, ensure_ascii=False)
+
+            # Compress using gzip
+            compressed = gzip.compress(json_data.encode('utf-8'))
+
+            # Encode to base64 for safe storage in JSON
+            checkpoint = base64.b64encode(compressed).decode('ascii')
+
+            return checkpoint
+
+        except Exception as e:
+            logger.warning(f"Failed to create checkpoint: {e}")
+            return None
+
+    @staticmethod
+    def _decompress_checkpoint(checkpoint: str) -> dict:
+        """
+        Decompress a checkpoint to restore workflow state.
+
+        Args:
+            checkpoint: Base64-encoded gzip-compressed JSON string
+
+        Returns:
+            Deserialized state snapshot dictionary
+        """
+        try:
+            # Decode from base64
+            compressed = base64.b64decode(checkpoint.encode('ascii'))
+
+            # Decompress
+            json_data = gzip.decompress(compressed).decode('utf-8')
+
+            # Parse JSON
+            state_snapshot = json.loads(json_data)
+
+            return state_snapshot
+
+        except Exception as e:
+            logger.error(f"Failed to decompress checkpoint: {e}")
+            raise ValueError(f"Invalid checkpoint data: {e}")
+
     async def execute(self, initial_input: Any) -> ExecutionResult:
         """
         Execute the workflow in topological order.
         """
         try:
+            # Store initial input for checkpoint replay
+            self.initial_input = initial_input
+
             # Find input nodes (no incoming edges)
             start_nodes = [
                 nid for nid, node in self.nodes.items()
                 if nid not in self.incoming or len(self.incoming[nid]) == 0
             ]
-            
+
             if not start_nodes:
                 # Fallback: find nodes labeled as 'input' type
                 start_nodes = [
                     nid for nid, node in self.nodes.items()
                     if node.get("type") == "input"
                 ]
-            
+
             if not start_nodes:
                 return ExecutionResult(
                     output=None,
@@ -116,55 +232,204 @@ class WorkflowExecutor:
                     success=False,
                     error_message="No starting nodes found in workflow"
                 )
-            
+
             # Execute starting nodes with initial input
             for node_id in start_nodes:
                 await self._execute_node(node_id, initial_input)
-            
+
             # Execute remaining nodes in order
             executed = set(start_nodes)
             to_execute = self._get_ready_nodes(executed)
-            
+
             while to_execute:
                 for node_id in to_execute:
                     # Gather inputs from predecessor nodes
                     input_data = self._gather_inputs(node_id)
                     await self._execute_node(node_id, input_data)
                     executed.add(node_id)
-                
+
                 to_execute = self._get_ready_nodes(executed)
-            
+
             # Find output nodes and gather final result
             output_nodes = [
                 nid for nid, node in self.nodes.items()
                 if node.get("type") == "output"
             ]
-            
+
             if output_nodes:
                 final_output = self.results[output_nodes[0]].output_data
             else:
                 # Use last executed node's output
                 last_executed = list(executed)[-1] if executed else None
                 final_output = self.results.get(last_executed, NodeResult("", "", "")).output_data
-            
+
             return ExecutionResult(
                 output=final_output,
                 logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
                 token_usage=self.token_usage,
                 api_calls=self.api_calls,
                 success=True,
             )
-            
+
         except Exception as e:
             logger.exception(f"Workflow execution failed: {e}")
             return ExecutionResult(
                 output=None,
                 logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
                 token_usage=self.token_usage,
                 api_calls=self.api_calls,
                 success=False,
                 error_message=str(e),
             )
+
+    async def execute_from_checkpoint(self, checkpoint: str, from_step_id: str) -> ExecutionResult:
+        """
+        Execute workflow from a checkpoint, resuming from a specific step.
+
+        Args:
+            checkpoint: Base64-encoded gzip-compressed checkpoint data
+            from_step_id: Node ID to resume execution from
+
+        Returns:
+            ExecutionResult with continued execution results
+        """
+        try:
+            # Restore state from checkpoint
+            state_snapshot = self._decompress_checkpoint(checkpoint)
+
+            # Validate checkpoint matches current workflow
+            checkpoint_nodes = set(state_snapshot.get("graph", {}).get("nodes", []))
+            current_nodes = set(self.nodes.keys())
+            if checkpoint_nodes != current_nodes:
+                logger.warning(
+                    f"Checkpoint graph mismatch: checkpoint has {len(checkpoint_nodes)} nodes, "
+                    f"current workflow has {len(current_nodes)} nodes"
+                )
+
+            # Restore execution context
+            context = state_snapshot.get("context", {})
+            self.token_usage = context.get("token_usage", 0)
+            self.api_calls = context.get("api_calls", 0)
+            self.initial_input = context.get("initial_input")
+
+            # Restore all executed node results
+            restored_results = state_snapshot.get("results", {})
+            for node_id, result_data in restored_results.items():
+                # Recreate NodeResult objects from checkpoint data
+                self.results[node_id] = NodeResult(
+                    node_id=result_data["node_id"],
+                    node_type=result_data["node_type"],
+                    status=result_data["status"],
+                    input_data=result_data.get("input_data"),
+                    output_data=result_data.get("output_data"),
+                    error_message=result_data.get("error_message"),
+                    token_usage=result_data.get("token_usage"),
+                )
+                # Add to execution steps (these are already completed)
+                self.execution_steps.append({
+                    "node_id": node_id,
+                    "status": "completed" if result_data["status"] == "success" else result_data["status"],
+                    "input_data": result_data.get("input_data"),
+                    "output_data": result_data.get("output_data"),
+                    "error_message": result_data.get("error_message"),
+                    "token_usage": result_data.get("token_usage") or {"input": 0, "output": 0, "total": 0},
+                    "started_at": None,  # Historical data, no timestamp
+                    "completed_at": None,
+                    "checkpoint": None,  # Don't duplicate checkpoint data
+                })
+
+            # Verify from_step_id exists
+            if from_step_id not in self.nodes:
+                raise ValueError(f"Step '{from_step_id}' not found in workflow")
+
+            # Build set of executed nodes
+            executed = set(self.results.keys())
+
+            # Start from the specified step
+            # Check if all predecessors have been executed
+            predecessors = self.incoming.get(from_step_id, [])
+            missing_predecessors = [p for p in predecessors if p not in executed]
+            if missing_predecessors:
+                logger.warning(
+                    f"Resuming from step '{from_step_id}' but some predecessors "
+                    f"were not in checkpoint: {missing_predecessors}"
+                )
+
+            # Remove from_step_id and all its successors from executed set
+            # so they will be re-executed
+            to_reexecute = self._get_successors(from_step_id)
+            to_reexecute.add(from_step_id)
+            for node_id in to_reexecute:
+                if node_id in executed:
+                    executed.remove(node_id)
+                if node_id in self.results:
+                    del self.results[node_id]
+
+            # Execute from_step_id
+            input_data = self._gather_inputs(from_step_id)
+            await self._execute_node(from_step_id, input_data)
+            executed.add(from_step_id)
+
+            # Continue executing remaining nodes
+            to_execute = self._get_ready_nodes(executed)
+            while to_execute:
+                for node_id in to_execute:
+                    input_data = self._gather_inputs(node_id)
+                    await self._execute_node(node_id, input_data)
+                    executed.add(node_id)
+
+                to_execute = self._get_ready_nodes(executed)
+
+            # Find output nodes and gather final result
+            output_nodes = [
+                nid for nid, node in self.nodes.items()
+                if node.get("type") == "output"
+            ]
+
+            if output_nodes:
+                final_output = self.results[output_nodes[0]].output_data
+            else:
+                # Use last executed node's output
+                last_executed = list(executed)[-1] if executed else None
+                final_output = self.results.get(last_executed, NodeResult("", "", "")).output_data
+
+            return ExecutionResult(
+                output=final_output,
+                logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
+                token_usage=self.token_usage,
+                api_calls=self.api_calls,
+                success=True,
+            )
+
+        except Exception as e:
+            logger.exception(f"Checkpoint replay failed: {e}")
+            return ExecutionResult(
+                output=None,
+                logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
+                token_usage=self.token_usage,
+                api_calls=self.api_calls,
+                success=False,
+                error_message=str(e),
+            )
+
+    def _get_successors(self, node_id: str) -> set[str]:
+        """Get all successor nodes recursively."""
+        successors = set()
+        to_visit = [node_id]
+
+        while to_visit:
+            current = to_visit.pop()
+            children = self.outgoing.get(current, [])
+            for child in children:
+                if child not in successors:
+                    successors.add(child)
+                    to_visit.append(child)
+
+        return successors
     
     def _get_ready_nodes(self, executed: set[str]) -> list[str]:
         """Get nodes whose all predecessors have been executed."""
@@ -198,11 +463,21 @@ class WorkflowExecutor:
     async def _execute_node(self, node_id: str, input_data: Any) -> NodeResult:
         """Execute a single node based on its type."""
         import time
-        
+
         node = self.nodes[node_id]
         node_type = node.get("type", "unknown")
         start_time = time.time()
-        
+        started_at = datetime.now(timezone.utc)
+
+        # Emit event: Node execution started
+        if self.execution_id:
+            await self._emit_step_event(
+                node_id=node_id,
+                status="running",
+                input_data=input_data,
+                started_at=started_at,
+            )
+
         try:
             if node_type == "input":
                 result = self._handle_input_node(node, input_data)
@@ -223,22 +498,91 @@ class WorkflowExecutor:
                     status="error",
                     error_message=f"Unknown node type: {node_type}"
                 )
-            
+
             result.duration_ms = int((time.time() - start_time) * 1000)
-            
+            result.started_at = started_at
+            result.completed_at = datetime.now(timezone.utc)
+
+            # Emit event: Node execution completed successfully
+            if self.execution_id:
+                await self._emit_step_event(
+                    node_id=node_id,
+                    status="completed",
+                    input_data=input_data,
+                    output_data=result.output_data,
+                    token_usage=result.token_usage,
+                    started_at=started_at,
+                    completed_at=result.completed_at,
+                )
+
         except Exception as e:
             logger.exception(f"Error executing node {node_id}: {e}")
+            completed_at = datetime.now(timezone.utc)
             result = NodeResult(
                 node_id=node_id,
                 node_type=node_type,
                 status="error",
                 input_data=input_data,
                 error_message=str(e),
-                duration_ms=int((time.time() - start_time) * 1000)
+                duration_ms=int((time.time() - start_time) * 1000),
+                started_at=started_at,
+                completed_at=completed_at,
             )
-        
+
+            # Emit event: Node execution failed
+            if self.execution_id:
+                await self._emit_step_event(
+                    node_id=node_id,
+                    status="failed",
+                    input_data=input_data,
+                    error_message=str(e),
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
+
+        # Store result
         self.results[node_id] = result
+
+        # Create checkpoint after successful execution for replay capability
+        # Only create checkpoint on success to save storage space
+        if result.status == "success":
+            checkpoint = self._create_checkpoint()
+            result.checkpoint = checkpoint
+
+        self.execution_steps.append(result.to_execution_step())
         return result
+
+    async def _emit_step_event(
+        self,
+        node_id: str,
+        status: str,
+        input_data: Any = None,
+        output_data: Any = None,
+        error_message: str = None,
+        token_usage: dict = None,
+        started_at: datetime = None,
+        completed_at: datetime = None,
+    ):
+        """Emit WebSocket event for step update."""
+        if not self.execution_id:
+            return
+
+        try:
+            from ..websocket import manager
+
+            await manager.send_step_update(
+                execution_id=str(self.execution_id),
+                node_id=node_id,
+                status=status,
+                input_data=input_data,
+                output_data=output_data,
+                error_message=error_message,
+                token_usage=token_usage,
+                started_at=started_at.isoformat() if started_at else None,
+                completed_at=completed_at.isoformat() if completed_at else None,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit WebSocket event: {e}")
     
     def _handle_input_node(self, node: dict, input_data: Any) -> NodeResult:
         """Handle input node - pass through initial data."""

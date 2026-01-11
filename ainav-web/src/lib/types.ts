@@ -352,3 +352,102 @@ export interface ExecutionCreate {
   trigger_type?: string;
   trigger_metadata?: Record<string, unknown>;
 }
+
+// =============================================================================
+// EXECUTION TRACKING TYPES (Real-Time Debugging)
+// =============================================================================
+
+/**
+ * Node execution status enum
+ * Represents the current state of a node during workflow execution
+ */
+export enum NodeExecutionStatus {
+  PENDING = "pending",
+  RUNNING = "running",
+  SUCCESS = "success",
+  ERROR = "error",
+  SKIPPED = "skipped",
+  COMPLETED = "completed",
+  FAILED = "failed",
+}
+
+/**
+ * Detailed execution step information
+ * Matches backend ExecutionStepDetail schema
+ */
+export interface ExecutionStep {
+  node_id: string;
+  status: NodeExecutionStatus;
+  input_data?: unknown;
+  output_data?: unknown;
+  error_message?: string;
+  token_usage?: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  started_at?: string;
+  completed_at?: string;
+  checkpoint?: string;  // Compressed state snapshot for replay
+}
+
+/**
+ * WebSocket message for execution updates
+ * Sent in real-time as nodes execute
+ */
+export interface ExecutionStepUpdate {
+  execution_id: string;
+  node_id: string;
+  status: NodeExecutionStatus;
+  input_data?: unknown;
+  output_data?: unknown;
+  error_message?: string;
+  token_usage?: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  timestamp: string;
+}
+
+/**
+ * Detailed execution response including all steps
+ * Matches backend ExecutionDetailsResponse schema
+ */
+export interface ExecutionDetails {
+  id: string;
+  workflow_id: string;
+  user_id: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  input_data?: Record<string, unknown>;
+  output_data?: unknown;
+  error_message?: string;
+  execution_steps?: ExecutionStep[];
+  token_usage: number;
+  total_api_calls: number;
+  duration_ms?: number;
+  trigger_type?: string;
+  trigger_metadata?: Record<string, unknown>;
+  parent_execution_id?: string;
+  replayed_from_step?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Execution replay request
+ */
+export interface ExecutionReplayRequest {
+  from_step_id: string;
+}
+
+/**
+ * Execution replay response
+ */
+export interface ExecutionReplayResponse {
+  new_execution_id: string;
+  parent_execution_id: string;
+  replayed_from_step: string;
+  status: string;
+  message: string;
+}

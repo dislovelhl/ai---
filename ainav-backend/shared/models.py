@@ -272,31 +272,55 @@ class AgentExecution(Base, TimestampMixin):
     AgentExecution: Runtime execution logs for agent workflows.
     """
     __tablename__ = "agent_executions"
-    
+    __table_args__ = (
+        # Index for querying executions by workflow and status
+        {"schema": None}
+    )
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+    workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+
+    # Replay tracking - link to original execution if this is a replay
+    parent_execution_id = Column(UUID(as_uuid=True), ForeignKey("agent_executions.id"), nullable=True, index=True)
+    replayed_from_step = Column(String(100), nullable=True)  # Node ID from which replay started
+
     # Execution status
-    status = Column(String(20), default="pending")  # 'pending', 'running', 'completed', 'failed', 'cancelled'
-    
+    status = Column(String(20), default="pending", index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+
     # Input/Output
     input_data = Column(JSON)
     output_data = Column(JSON)
     error_message = Column(Text)
-    
-    # Execution trace - step-by-step log of node executions
+
+    # Execution trace - step-by-step log of node executions (deprecated, use execution_steps)
     execution_log = Column(JSON)  # [{node_id, status, input, output, duration_ms, timestamp}, ...]
-    
+
+    # Detailed per-node execution data for real-time debugging
+    # Format: [
+    #   {
+    #     "node_id": "uuid",
+    #     "status": "pending|running|completed|failed",
+    #     "input_data": {...},
+    #     "output_data": {...},
+    #     "error_message": "...",
+    #     "token_usage": {"input": 0, "output": 0, "total": 0},
+    #     "started_at": "2024-01-01T00:00:00Z",
+    #     "completed_at": "2024-01-01T00:00:01Z"
+    #   },
+    #   ...
+    # ]
+    execution_steps = Column(JSON, default=list)
+
     # Usage metrics
     token_usage = Column(Integer, default=0)
     total_api_calls = Column(Integer, default=0)
     duration_ms = Column(Integer)
-    
+
     # Trigger info
     trigger_type = Column(String(50))  # How was this execution triggered
     trigger_metadata = Column(JSON)  # Additional trigger context
-    
+
     # Relationships
     workflow = relationship("AgentWorkflow", back_populates="executions")
 
