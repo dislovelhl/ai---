@@ -34,3 +34,6 @@ sse-starlette>=2.0.0
 
 # Numerical computation (used by cache_service for cosine similarity)
 numpy>=1.26.0
+
+# Chinese pinyin conversion for search enhancement
+pypinyin>=0.50.0
