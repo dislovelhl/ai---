@@ -21,6 +21,14 @@ tool_scenarios = Table(
     Column("scenario_id", UUID(as_uuid=True), ForeignKey("scenarios.id"), primary_key=True),
 )
 
+# Junction table for AgentWorkflow and WorkflowTag
+workflow_workflow_tags = Table(
+    "workflow_workflow_tags",
+    Base.metadata,
+    Column("workflow_id", UUID(as_uuid=True), ForeignKey("agent_workflows.id"), primary_key=True),
+    Column("tag_id", UUID(as_uuid=True), ForeignKey("workflow_tags.id"), primary_key=True),
+)
+
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
@@ -94,6 +102,41 @@ class Tool(Base, TimestampMixin):
 # AGENTIC PLATFORM MODELS
 # =============================================================================
 
+class WorkflowCategory(Base, TimestampMixin):
+    """
+    WorkflowCategory: Categories for organizing agent workflows in the gallery.
+    """
+    __tablename__ = "workflow_categories"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    name_zh = Column(String(100))
+    slug = Column(String(100), unique=True, index=True, nullable=False)
+    description = Column(Text)
+    description_zh = Column(Text)
+    icon = Column(String(255))
+    order = Column(Integer, default=0)
+
+    # Relationship to workflows
+    workflows = relationship("AgentWorkflow", back_populates="category")
+
+
+class WorkflowTag(Base, TimestampMixin):
+    """
+    WorkflowTag: Tags for filtering and searching workflows.
+    """
+    __tablename__ = "workflow_tags"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(50), unique=True, index=True, nullable=False)
+    name_zh = Column(String(50))
+    slug = Column(String(50), unique=True, index=True, nullable=False)
+    usage_count = Column(Integer, default=0)  # Track how many workflows use this tag
+
+    # Relationship to workflows (many-to-many)
+    workflows = relationship("AgentWorkflow", secondary=workflow_workflow_tags, back_populates="tags")
+
+
 class Skill(Base, TimestampMixin):
     """
     Skill: Represents what a tool CAN DO via API.
@@ -136,10 +179,10 @@ class AgentWorkflow(Base, TimestampMixin):
     AgentWorkflow: User-created agent blueprints stored as React Flow graph definitions.
     """
     __tablename__ = "agent_workflows"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Workflow metadata
     name = Column(String(255), nullable=False)
     name_zh = Column(String(255))
@@ -147,6 +190,9 @@ class AgentWorkflow(Base, TimestampMixin):
     description = Column(Text)
     description_zh = Column(Text)
     icon = Column(String(100))  # Emoji or icon name
+
+    # Category for organization
+    category_id = Column(UUID(as_uuid=True), ForeignKey("workflow_categories.id"), nullable=True)
     
     # React Flow graph definition
     graph_json = Column(JSON, nullable=False)  # {nodes: [], edges: [], viewport: {}}
@@ -176,6 +222,8 @@ class AgentWorkflow(Base, TimestampMixin):
     
     # Relationships
     user = relationship("User", back_populates="workflows")
+    category = relationship("WorkflowCategory", back_populates="workflows")
+    tags = relationship("WorkflowTag", secondary=workflow_workflow_tags, back_populates="workflows")
     executions = relationship("AgentExecution", back_populates="workflow", cascade="all, delete-orphan")
     forked_from = relationship("AgentWorkflow", remote_side=[id])
 
