@@ -54,24 +54,28 @@ async def list_executions(
     page_size: int = Query(20, ge=1, le=100),
     workflow_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     List execution history with optional filtering.
+
+    Requires authentication. Only returns executions owned by the authenticated user.
     """
     query = select(AgentExecution)
     count_query = select(func.count(AgentExecution.id))
-    
+
+    # Filter by authenticated user
+    query = query.where(AgentExecution.user_id == user_id)
+    count_query = count_query.where(AgentExecution.user_id == user_id)
+
     if workflow_id:
         query = query.where(AgentExecution.workflow_id == workflow_id)
         count_query = count_query.where(AgentExecution.workflow_id == workflow_id)
-    
+
     if status:
         query = query.where(AgentExecution.status == status)
         count_query = count_query.where(AgentExecution.status == status)
-    
-    # TODO: Filter by user_id from auth
     
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
@@ -94,19 +98,29 @@ async def list_executions(
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 async def get_execution(
     execution_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Get detailed execution information including logs.
+
+    Requires authentication. User must own the execution.
     """
     result = await db.execute(
         select(AgentExecution).where(AgentExecution.id == execution_id)
     )
     execution = result.scalar_one_or_none()
-    
+
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-    
+
+    # Verify ownership
+    if execution.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to access this execution"
+        )
+
     return ExecutionResponse.model_validate(execution)
 
 
@@ -250,62 +264,75 @@ async def execute_workflow_background(
 @router.post("/{execution_id}/cancel", status_code=200)
 async def cancel_execution(
     execution_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Cancel a running execution.
+
+    Requires authentication. User must own the execution.
     """
     result = await db.execute(
         select(AgentExecution).where(AgentExecution.id == execution_id)
     )
     execution = result.scalar_one_or_none()
-    
+
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-    
+
+    # Verify ownership
+    if execution.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to cancel this execution"
+        )
+
     if execution.status not in ["pending", "running"]:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot cancel execution with status: {execution.status}"
         )
-    
+
     execution.status = "cancelled"
     await db.commit()
-    
+
     return {"status": "cancelled", "execution_id": str(execution_id)}
 
 
 @router.post("/run-sync", response_model=ExecutionResponse)
 async def run_workflow_sync(
     execution_data: ExecutionCreate,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Execute a workflow synchronously (wait for result).
     Useful for simple workflows or testing.
+
+    Requires authentication. User must own the workflow or workflow must be public.
     """
     # Get workflow
     workflow_result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == execution_data.workflow_id)
     )
     workflow = workflow_result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
+
+    # Check workflow access: user must own it or it must be public
+    if not workflow.is_public and workflow.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to execute this workflow"
+        )
     
     start_time = datetime.now(timezone.utc)
-    
+
     # Create execution record
     execution = AgentExecution(
         workflow_id=workflow.id,
-        user_id=user.id,
+        user_id=user_id,
         status="running",
         input_data=execution_data.input_data,
         trigger_type=execution_data.trigger_type,
