@@ -363,3 +363,34 @@ class UserSubscription(Base, TimestampMixin):
     # Relationships
     user = relationship("User", backref="subscriptions")
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+
+class UsageRecord(Base, TimestampMixin):
+    """
+    UsageRecord: Tracks daily and monthly workflow execution counts per user.
+    Used for enforcing subscription limits and analytics.
+    """
+    __tablename__ = "usage_records"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Foreign key
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+
+    # Date tracking
+    record_date = Column(DateTime(timezone=True), nullable=False, index=True)  # Date for this usage record
+    period_type = Column(String(20), nullable=False, index=True)  # 'daily' or 'monthly'
+
+    # Year and month for efficient monthly queries
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)  # 1-12
+    day = Column(Integer, nullable=True)  # 1-31 (null for monthly records)
+
+    # Execution counts
+    execution_count = Column(Integer, default=0, nullable=False)  # Number of workflow executions
+
+    # Usage metadata
+    workflow_ids = Column(JSON)  # List of workflow IDs executed (for analytics)
+
+    # Relationships
+    user = relationship("User", backref="usage_records")
