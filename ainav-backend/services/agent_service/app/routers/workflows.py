@@ -157,18 +157,47 @@ async def list_public_workflows(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     is_template: Optional[bool] = None,
+    category_id: Optional[UUID] = None,
+    tag_ids: Optional[list[UUID]] = Query(None),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    List public/community workflows.
+    List public/community workflows with optional filtering by category and tags.
     """
+    from shared.models import WorkflowTag, workflow_workflow_tags
+
     query = select(AgentWorkflow).where(AgentWorkflow.is_public == True)
     count_query = select(func.count(AgentWorkflow.id)).where(AgentWorkflow.is_public == True)
-    
+
     if is_template is not None:
         query = query.where(AgentWorkflow.is_template == is_template)
         count_query = count_query.where(AgentWorkflow.is_template == is_template)
-    
+
+    if category_id is not None:
+        query = query.where(AgentWorkflow.category_id == category_id)
+        count_query = count_query.where(AgentWorkflow.category_id == category_id)
+
+    if tag_ids is not None and len(tag_ids) > 0:
+        # Join with the junction table to filter by tags
+        # Workflows must have ALL specified tags (AND logic)
+        query = query.join(
+            workflow_workflow_tags,
+            AgentWorkflow.id == workflow_workflow_tags.c.workflow_id
+        ).where(
+            workflow_workflow_tags.c.tag_id.in_(tag_ids)
+        ).group_by(AgentWorkflow.id).having(
+            func.count(workflow_workflow_tags.c.tag_id) == len(tag_ids)
+        )
+
+        count_query = count_query.join(
+            workflow_workflow_tags,
+            AgentWorkflow.id == workflow_workflow_tags.c.workflow_id
+        ).where(
+            workflow_workflow_tags.c.tag_id.in_(tag_ids)
+        ).group_by(AgentWorkflow.id).having(
+            func.count(workflow_workflow_tags.c.tag_id) == len(tag_ids)
+        )
+
     if search:
         search_filter = f"%{search}%"
         query = query.where(
@@ -181,7 +210,7 @@ async def list_public_workflows(
             (AgentWorkflow.name_zh.ilike(search_filter)) |
             (AgentWorkflow.description.ilike(search_filter))
         )
-    
+
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -193,7 +222,7 @@ async def list_public_workflows(
 
     result = await db.execute(query)
     workflows = result.scalars().all()
-    
+
     return PaginatedWorkflowsResponse(
         items=[WorkflowSummary.model_validate(w) for w in workflows],
         total=total,
