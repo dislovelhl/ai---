@@ -266,3 +266,16 @@ class PaginatedExecutionsResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# =============================================================================
+# TEMPLATE CATEGORY SCHEMAS
+# =============================================================================
+
+class TemplateCategoryCount(BaseModel):
+    """Category with template count for discovery."""
+    category: str
+    count: int
+
+    class Config:
+        from_attributes = True

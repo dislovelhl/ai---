@@ -14,6 +14,10 @@ from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
+from ..schemas import (
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowSummary,
+    PaginatedWorkflowsResponse, TemplateCategoryCount
+)
 
 router = APIRouter()
 planner = PlannerAgent()
@@ -253,6 +257,36 @@ async def get_featured_templates(
     templates = result.scalars().all()
 
     return [WorkflowSummary.model_validate(t) for t in templates]
+
+
+@router.get("/templates/categories", response_model=list[TemplateCategoryCount])
+async def get_template_categories(
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Get all template categories with workflow counts.
+    Returns categories sorted by count (descending).
+    """
+    query = select(
+        AgentWorkflow.category,
+        func.count(AgentWorkflow.id).label('count')
+    ).where(
+        AgentWorkflow.is_template == True,
+        AgentWorkflow.is_public == True,
+        AgentWorkflow.category.isnot(None)
+    ).group_by(
+        AgentWorkflow.category
+    ).order_by(
+        func.count(AgentWorkflow.id).desc()
+    )
+
+    result = await db.execute(query)
+    categories = result.all()
+
+    return [
+        TemplateCategoryCount(category=cat, count=count)
+        for cat, count in categories
+    ]
 
 
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
