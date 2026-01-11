@@ -62,6 +62,15 @@ workflow_stars = Table(
 )
 
 
+# Junction table for LearningPath and Tools (recommended tools)
+learning_path_tools = Table(
+    "learning_path_tools",
+    Base.metadata,
+    Column("learning_path_id", UUID(as_uuid=True), ForeignKey("learning_paths.id"), primary_key=True),
+    Column("tool_id", UUID(as_uuid=True), ForeignKey("tools.id"), primary_key=True),
+)
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -86,6 +95,8 @@ class User(Base, TimestampMixin):
     workflows = relationship("AgentWorkflow", back_populates="user")
     starred_workflows = relationship("AgentWorkflow", secondary=workflow_stars, backref="starred_by")
     interactions = relationship("UserInteraction", back_populates="user", cascade="all, delete-orphan")
+    learning_progress = relationship("UserLearningProgress", back_populates="user", cascade="all, delete-orphan")
+    certificates = relationship("LearningCertificate", back_populates="user", cascade="all, delete-orphan")
 
 
 class Category(Base, TimestampMixin):
@@ -137,6 +148,127 @@ class Tool(Base, TimestampMixin):
     scenarios = relationship("Scenario", secondary=tool_scenarios)
     # Relationship to skills
     skills = relationship("Skill", back_populates="tool", cascade="all, delete-orphan")
+    # Relationship to learning paths
+    learning_paths = relationship("LearningPath", secondary=learning_path_tools, back_populates="recommended_tools")
+
+
+class LearningPath(Base, TimestampMixin):
+    """
+    LearningPath: Structured learning roadmaps for AI skills and tools.
+    """
+    __tablename__ = "learning_paths"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    name_zh = Column(String(255))
+    slug = Column(String(255), unique=True, index=True, nullable=False)
+    description = Column(Text)
+    description_zh = Column(Text)
+    icon = Column(String(255))
+
+    # Difficulty and time estimation
+    difficulty_level = Column(String(20), nullable=False)  # 'beginner', 'intermediate', 'advanced'
+    estimated_hours = Column(Integer)
+
+    # Categorization and ordering
+    category = Column(String(100))
+    order = Column(Integer, default=0)
+
+    # Publishing status
+    is_published = Column(Boolean, default=False)
+
+    # Learning structure (JSON arrays)
+    prerequisites = Column(JSON, default=list)  # ["Python basics", "SQL fundamentals"]
+    learning_outcomes = Column(JSON, default=list)  # ["Build REST APIs", "Deploy to cloud"]
+
+    # Relationships
+    modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
+    user_progress = relationship("UserLearningProgress", back_populates="learning_path", cascade="all, delete-orphan")
+    certificates = relationship("LearningCertificate", back_populates="learning_path", cascade="all, delete-orphan")
+    recommended_tools = relationship("Tool", secondary=learning_path_tools, back_populates="learning_paths")
+
+
+class LearningPathModule(Base, TimestampMixin):
+    """
+    LearningPathModule: Individual learning modules within a learning path.
+    Each module represents a discrete learning unit (video, article, tutorial, exercise).
+    """
+    __tablename__ = "learning_path_modules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Module ordering and identification
+    order = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    title_zh = Column(String(255))
+    description = Column(Text)
+    description_zh = Column(Text)
+
+    # Content details
+    content_type = Column(String(20), nullable=False)  # 'video', 'article', 'tutorial', 'exercise'
+    content_url = Column(String(512))
+    estimated_minutes = Column(Integer)
+
+    # Requirement and assessment
+    is_required = Column(Boolean, default=True)
+    quiz_data = Column(JSON)  # {"questions": [...], "passing_score": 80}
+
+    # Relationship
+    learning_path = relationship("LearningPath", back_populates="modules")
+
+
+class UserLearningProgress(Base, TimestampMixin):
+    """
+    UserLearningProgress: Tracks user progress through learning paths.
+    """
+    __tablename__ = "user_learning_progress"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Progress tracking
+    status = Column(String(20), nullable=False, default="not_started")  # 'not_started', 'in_progress', 'completed'
+    progress_percentage = Column(Float, default=0.0)  # 0.0 - 100.0
+    completed_modules = Column(JSON, default=list)  # Array of module UUIDs (as strings)
+
+    # Timestamps for progress lifecycle
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="learning_progress")
+    learning_path = relationship("LearningPath", back_populates="user_progress")
+
+
+class LearningCertificate(Base, TimestampMixin):
+    """
+    LearningCertificate: Represents completion certificates issued to users
+    after successfully completing a learning path.
+    """
+    __tablename__ = "learning_certificates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Certificate identification
+    certificate_number = Column(String(100), unique=True, nullable=False, index=True)
+
+    # Certificate file and sharing
+    certificate_url = Column(String(512), nullable=False)  # Path to generated PDF
+    share_token = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False, index=True)
+
+    # Engagement metrics
+    view_count = Column(Integer, default=0)
+
+    # Issuance timestamp
+    issued_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="certificates")
+    learning_path = relationship("LearningPath", back_populates="certificates")
 
 
 # =============================================================================

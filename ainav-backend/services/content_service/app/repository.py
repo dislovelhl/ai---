@@ -45,7 +45,7 @@ class BaseRepository(Generic[T]):
         await self.session.commit()
         return result.rowcount > 0
 
-from shared.models import Category, Scenario, Tool, tool_scenarios
+from shared.models import Category, Scenario, Tool, tool_scenarios, LearningPath, LearningPathModule
 
 class CategoryRepository(BaseRepository[Category]):
     def __init__(self, session: AsyncSession):
@@ -118,59 +118,103 @@ class ToolRepository(BaseRepository[Tool]):
             await self.session.commit()
             await self.session.refresh(tool)
 
-    async def get_alternatives(
-        self,
-        tool_id: any,
-        limit: int = 5,
-        prioritize_china: bool = True
-    ) -> List[Tool]:
-        """
-        Find alternative tools based on similarity algorithm:
-        - Same category: 3 points
-        - Each shared scenario: 1 point
-        - China-accessible bonus: 2 points (if original requires VPN and prioritize_china=True)
+class LearningPathRepository(BaseRepository[LearningPath]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(LearningPath, session)
 
-        Returns top N alternatives sorted by score (descending)
-        """
+    async def get_all_with_relations(self, skip: int = 0, limit: int = 100) -> List[LearningPath]:
         from sqlalchemy.orm import selectinload
-
-        # Get the original tool with relations
-        original_tool = await self.get_by_id_with_relations(tool_id)
-        if not original_tool:
-            return []
-
-        # Get all other tools (excluding the original)
         query = select(self.model).options(
-            selectinload(self.model.category),
-            selectinload(self.model.scenarios)
-        ).where(self.model.id != tool_id)
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).offset(skip).limit(limit)
         result = await self.session.execute(query)
-        all_tools = list(result.scalars().all())
+        return result.scalars().all()
 
-        # Calculate scores for each alternative
-        scored_tools = []
-        original_scenario_ids = {s.id for s in original_tool.scenarios}
+    async def get_by_slug_with_modules_and_tools(self, slug: str) -> Optional[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.slug == slug)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
 
-        for tool in all_tools:
-            score = 0
+    async def create_with_relations(self, tool_ids: List[any] = None, **kwargs) -> LearningPath:
+        # Resolve tools first
+        tools = []
+        if tool_ids:
+            tools_query = select(Tool).where(Tool.id.in_(tool_ids))
+            result = await self.session.execute(tools_query)
+            tools = list(result.scalars().all())
 
-            # Same category: 3 points
-            if tool.category_id == original_tool.category_id:
-                score += 3
+        learning_path = LearningPath(**kwargs)
+        learning_path.recommended_tools = tools
+        self.session.add(learning_path)
+        await self.session.commit()
 
-            # Overlapping scenarios: 1 point each
-            tool_scenario_ids = {s.id for s in tool.scenarios}
-            shared_scenarios = original_scenario_ids.intersection(tool_scenario_ids)
-            score += len(shared_scenarios)
+        # Capture ID safely
+        path_id = learning_path.id
+        return await self.get_by_id_with_relations(path_id)
 
-            # China-accessible bonus: 2 points if original requires VPN
-            if prioritize_china and original_tool.requires_vpn and tool.is_china_accessible:
-                score += 2
+    async def get_by_id_with_relations(self, id: any) -> Optional[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.id == id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
 
-            scored_tools.append((tool, score))
+    async def associate_tools(self, learning_path_id: any, tool_ids: List[any]):
+        # Fetch the learning path with tools properly using existing method
+        learning_path = await self.get_by_id_with_relations(learning_path_id)
+        if not learning_path:
+            return
 
-        # Sort by score (descending) and take top N
-        scored_tools.sort(key=lambda x: x[1], reverse=True)
-        alternatives = [tool for tool, score in scored_tools[:limit]]
+        if tool_ids is not None:
+            # Fetch tools
+            tools_query = select(Tool).where(Tool.id.in_(tool_ids))
+            result = await self.session.execute(tools_query)
+            # Match tools to learning path
+            learning_path.recommended_tools = list(result.scalars().all())
+            await self.session.commit()
+            await self.session.refresh(learning_path)
 
-        return alternatives
+    async def get_published_paths(self, skip: int = 0, limit: int = 100) -> List[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.is_published == True).offset(skip).limit(limit)
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
+class LearningPathModuleRepository(BaseRepository[LearningPathModule]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(LearningPathModule, session)
+
+    async def get_by_learning_path_id(self, learning_path_id: any) -> List[LearningPathModule]:
+        """Get all modules for a specific learning path, ordered by order field"""
+        from sqlalchemy import asc
+        query = select(self.model).where(
+            self.model.learning_path_id == learning_path_id
+        ).order_by(asc(self.model.order))
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
+    async def reorder_modules(self, module_orders: List[dict]) -> bool:
+        """
+        Update the order of multiple modules.
+        module_orders: List of dicts with 'id' and 'order' keys
+        Example: [{"id": "uuid1", "order": 1}, {"id": "uuid2", "order": 2}]
+        """
+        try:
+            for item in module_orders:
+                module_id = item.get("id")
+                new_order = item.get("order")
+                if module_id and new_order is not None:
+                    await self.update(module_id, order=new_order)
+            return True
+        except Exception:
+            return False

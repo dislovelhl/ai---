@@ -15,8 +15,6 @@ class TimestampSchema(BaseModel):
 class ScenarioBase(BaseModel):
     name: str = Field(..., max_length=100)
     slug: str = Field(..., max_length=100)
-    description: Optional[str] = None
-    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
     model_config = ConfigDict(from_attributes=True)
@@ -27,8 +25,6 @@ class ScenarioCreate(ScenarioBase):
 class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
     slug: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
-    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
 class ScenarioRead(ScenarioBase, TimestampSchema):
@@ -107,25 +103,82 @@ class ToolRead(ToolBase, TimestampSchema):
 
     model_config = ConfigDict(from_attributes=True)
 
-# --- Recommendation Response Schemas ---
+# --- Learning Path Modules ---
 
-class ToolRecommendationRead(BaseModel):
-    """Response schema for tool recommendations with scoring."""
-    tool: ToolRead
-    recommendation_score: float
+class LearningPathModuleBase(BaseModel):
+    order: int = Field(..., ge=0)
+    title: str = Field(..., max_length=255)
+    title_zh: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    content_type: str = Field(..., max_length=20)  # 'video', 'article', 'tutorial', 'exercise'
+    content_url: Optional[str] = Field(None, max_length=512)
+    estimated_minutes: Optional[int] = Field(None, ge=0)
+    is_required: bool = True
+    quiz_data: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 
-class ToolCombinationRead(BaseModel):
-    """Response schema for tool combinations that work well together."""
-    tools: List[ToolRead]
-    co_occurrence_count: int
+class LearningPathModuleCreate(LearningPathModuleBase):
+    learning_path_id: UUID4
+
+class LearningPathModuleUpdate(BaseModel):
+    order: Optional[int] = Field(None, ge=0)
+    title: Optional[str] = Field(None, max_length=255)
+    title_zh: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    content_type: Optional[str] = Field(None, max_length=20)
+    content_url: Optional[str] = Field(None, max_length=512)
+    estimated_minutes: Optional[int] = Field(None, ge=0)
+    is_required: Optional[bool] = None
+    quiz_data: Optional[dict] = None
+
+class LearningPathModuleRead(LearningPathModuleBase, TimestampSchema):
+    id: UUID4
+    learning_path_id: UUID4
+
+# --- Learning Paths ---
+
+class LearningPathBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    name_zh: Optional[str] = Field(None, max_length=255)
+    slug: str = Field(..., max_length=255)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    difficulty_level: str = Field(..., max_length=20)  # 'beginner', 'intermediate', 'advanced'
+    estimated_hours: Optional[int] = Field(None, ge=0)
+    category: Optional[str] = Field(None, max_length=100)
+    order: int = 0
+    is_published: bool = False
+    prerequisites: List[str] = []
+    learning_outcomes: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
-class RelatedScenarioRead(BaseModel):
-    """Response schema for related scenarios with similarity metrics."""
-    scenario: ScenarioRead
-    similarity_score: float
+class LearningPathCreate(LearningPathBase):
+    tool_ids: List[UUID4] = []
+
+class LearningPathUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=255)
+    name_zh: Optional[str] = Field(None, max_length=255)
+    slug: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    difficulty_level: Optional[str] = Field(None, max_length=20)
+    estimated_hours: Optional[int] = Field(None, ge=0)
+    category: Optional[str] = Field(None, max_length=100)
+    order: Optional[int] = None
+    is_published: Optional[bool] = None
+    prerequisites: Optional[List[str]] = None
+    learning_outcomes: Optional[List[str]] = None
+    tool_ids: Optional[List[UUID4]] = None
+
+class LearningPathRead(LearningPathBase, TimestampSchema):
+    id: UUID4
+    modules: List[LearningPathModuleRead] = []
+    recommended_tools: List[ToolRead] = []
 
     model_config = ConfigDict(from_attributes=True)
