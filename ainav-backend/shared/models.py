@@ -76,7 +76,13 @@ class Tool(Base, TimestampMixin):
     
     is_china_accessible = Column(Boolean, default=True)
     requires_vpn = Column(Boolean, default=False)
-    
+
+    # Manual override fields for accessibility status
+    manual_override_enabled = Column(Boolean, default=False)
+    manual_override_reason = Column(Text, nullable=True)
+    manual_override_set_by = Column(String(255), nullable=True)
+    manual_override_set_at = Column(DateTime(timezone=True), nullable=True)
+
     avg_rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
     github_stars = Column(Integer, default=0)
