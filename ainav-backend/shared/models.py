@@ -194,6 +194,10 @@ class AgentExecution(Base, TimestampMixin):
     workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
+    # Replay tracking - link to original execution if this is a replay
+    parent_execution_id = Column(UUID(as_uuid=True), ForeignKey("agent_executions.id"), nullable=True, index=True)
+    replayed_from_step = Column(String(100), nullable=True)  # Node ID from which replay started
+
     # Execution status
     status = Column(String(20), default="pending", index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
 

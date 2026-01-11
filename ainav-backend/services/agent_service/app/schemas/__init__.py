@@ -185,6 +185,20 @@ class ExecutionCreate(BaseModel):
     trigger_metadata: Optional[dict[str, Any]] = None
 
 
+class ExecutionReplayRequest(BaseModel):
+    """Request to replay execution from a specific step."""
+    from_step_id: str = Field(..., description="Node ID from which to resume execution")
+
+
+class ExecutionReplayResponse(BaseModel):
+    """Response from execution replay request."""
+    new_execution_id: UUID
+    parent_execution_id: UUID
+    replayed_from_step: str
+    status: str
+    message: str
+
+
 class ExecutionResponse(BaseModel):
     id: UUID
     workflow_id: UUID
@@ -199,6 +213,8 @@ class ExecutionResponse(BaseModel):
     duration_ms: Optional[int]
     trigger_type: Optional[str]
     trigger_metadata: Optional[dict[str, Any]]
+    parent_execution_id: Optional[UUID] = None
+    replayed_from_step: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -247,6 +263,8 @@ class ExecutionDetailsResponse(BaseModel):
     duration_ms: Optional[int]
     trigger_type: Optional[str]
     trigger_metadata: Optional[dict[str, Any]]
+    parent_execution_id: Optional[UUID] = None
+    replayed_from_step: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

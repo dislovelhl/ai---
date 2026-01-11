@@ -232,37 +232,37 @@ class WorkflowExecutor:
                     success=False,
                     error_message="No starting nodes found in workflow"
                 )
-            
+
             # Execute starting nodes with initial input
             for node_id in start_nodes:
                 await self._execute_node(node_id, initial_input)
-            
+
             # Execute remaining nodes in order
             executed = set(start_nodes)
             to_execute = self._get_ready_nodes(executed)
-            
+
             while to_execute:
                 for node_id in to_execute:
                     # Gather inputs from predecessor nodes
                     input_data = self._gather_inputs(node_id)
                     await self._execute_node(node_id, input_data)
                     executed.add(node_id)
-                
+
                 to_execute = self._get_ready_nodes(executed)
-            
+
             # Find output nodes and gather final result
             output_nodes = [
                 nid for nid, node in self.nodes.items()
                 if node.get("type") == "output"
             ]
-            
+
             if output_nodes:
                 final_output = self.results[output_nodes[0]].output_data
             else:
                 # Use last executed node's output
                 last_executed = list(executed)[-1] if executed else None
                 final_output = self.results.get(last_executed, NodeResult("", "", "")).output_data
-            
+
             return ExecutionResult(
                 output=final_output,
                 logs=[r.to_dict() for r in self.results.values()],
@@ -283,6 +283,153 @@ class WorkflowExecutor:
                 success=False,
                 error_message=str(e),
             )
+
+    async def execute_from_checkpoint(self, checkpoint: str, from_step_id: str) -> ExecutionResult:
+        """
+        Execute workflow from a checkpoint, resuming from a specific step.
+
+        Args:
+            checkpoint: Base64-encoded gzip-compressed checkpoint data
+            from_step_id: Node ID to resume execution from
+
+        Returns:
+            ExecutionResult with continued execution results
+        """
+        try:
+            # Restore state from checkpoint
+            state_snapshot = self._decompress_checkpoint(checkpoint)
+
+            # Validate checkpoint matches current workflow
+            checkpoint_nodes = set(state_snapshot.get("graph", {}).get("nodes", []))
+            current_nodes = set(self.nodes.keys())
+            if checkpoint_nodes != current_nodes:
+                logger.warning(
+                    f"Checkpoint graph mismatch: checkpoint has {len(checkpoint_nodes)} nodes, "
+                    f"current workflow has {len(current_nodes)} nodes"
+                )
+
+            # Restore execution context
+            context = state_snapshot.get("context", {})
+            self.token_usage = context.get("token_usage", 0)
+            self.api_calls = context.get("api_calls", 0)
+            self.initial_input = context.get("initial_input")
+
+            # Restore all executed node results
+            restored_results = state_snapshot.get("results", {})
+            for node_id, result_data in restored_results.items():
+                # Recreate NodeResult objects from checkpoint data
+                self.results[node_id] = NodeResult(
+                    node_id=result_data["node_id"],
+                    node_type=result_data["node_type"],
+                    status=result_data["status"],
+                    input_data=result_data.get("input_data"),
+                    output_data=result_data.get("output_data"),
+                    error_message=result_data.get("error_message"),
+                    token_usage=result_data.get("token_usage"),
+                )
+                # Add to execution steps (these are already completed)
+                self.execution_steps.append({
+                    "node_id": node_id,
+                    "status": "completed" if result_data["status"] == "success" else result_data["status"],
+                    "input_data": result_data.get("input_data"),
+                    "output_data": result_data.get("output_data"),
+                    "error_message": result_data.get("error_message"),
+                    "token_usage": result_data.get("token_usage") or {"input": 0, "output": 0, "total": 0},
+                    "started_at": None,  # Historical data, no timestamp
+                    "completed_at": None,
+                    "checkpoint": None,  # Don't duplicate checkpoint data
+                })
+
+            # Verify from_step_id exists
+            if from_step_id not in self.nodes:
+                raise ValueError(f"Step '{from_step_id}' not found in workflow")
+
+            # Build set of executed nodes
+            executed = set(self.results.keys())
+
+            # Start from the specified step
+            # Check if all predecessors have been executed
+            predecessors = self.incoming.get(from_step_id, [])
+            missing_predecessors = [p for p in predecessors if p not in executed]
+            if missing_predecessors:
+                logger.warning(
+                    f"Resuming from step '{from_step_id}' but some predecessors "
+                    f"were not in checkpoint: {missing_predecessors}"
+                )
+
+            # Remove from_step_id and all its successors from executed set
+            # so they will be re-executed
+            to_reexecute = self._get_successors(from_step_id)
+            to_reexecute.add(from_step_id)
+            for node_id in to_reexecute:
+                if node_id in executed:
+                    executed.remove(node_id)
+                if node_id in self.results:
+                    del self.results[node_id]
+
+            # Execute from_step_id
+            input_data = self._gather_inputs(from_step_id)
+            await self._execute_node(from_step_id, input_data)
+            executed.add(from_step_id)
+
+            # Continue executing remaining nodes
+            to_execute = self._get_ready_nodes(executed)
+            while to_execute:
+                for node_id in to_execute:
+                    input_data = self._gather_inputs(node_id)
+                    await self._execute_node(node_id, input_data)
+                    executed.add(node_id)
+
+                to_execute = self._get_ready_nodes(executed)
+
+            # Find output nodes and gather final result
+            output_nodes = [
+                nid for nid, node in self.nodes.items()
+                if node.get("type") == "output"
+            ]
+
+            if output_nodes:
+                final_output = self.results[output_nodes[0]].output_data
+            else:
+                # Use last executed node's output
+                last_executed = list(executed)[-1] if executed else None
+                final_output = self.results.get(last_executed, NodeResult("", "", "")).output_data
+
+            return ExecutionResult(
+                output=final_output,
+                logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
+                token_usage=self.token_usage,
+                api_calls=self.api_calls,
+                success=True,
+            )
+
+        except Exception as e:
+            logger.exception(f"Checkpoint replay failed: {e}")
+            return ExecutionResult(
+                output=None,
+                logs=[r.to_dict() for r in self.results.values()],
+                execution_steps=self.execution_steps,
+                token_usage=self.token_usage,
+                api_calls=self.api_calls,
+                success=False,
+                error_message=str(e),
+            )
+
+    def _get_successors(self, node_id: str) -> set[str]:
+        """Get all successor nodes recursively."""
+        successors = set()
+        to_visit = [node_id]
+
+        while to_visit:
+            current = to_visit.pop()
+            children = self.outgoing.get(current, [])
+            for child in children:
+                if child not in successors:
+                    successors.add(child)
+                    to_visit.append(child)
+
+        return successors
     
     def _get_ready_nodes(self, executed: set[str]) -> list[str]:
         """Get nodes whose all predecessors have been executed."""

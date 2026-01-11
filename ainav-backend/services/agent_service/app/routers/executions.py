@@ -15,7 +15,8 @@ from shared.models import AgentExecution, AgentWorkflow, User
 from ..schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionSummary,
     ExecutionDetailsResponse, PaginatedExecutionsResponse,
-    ReactFlowNode, ReactFlowEdge
+    ReactFlowNode, ReactFlowEdge, ExecutionReplayRequest,
+    ExecutionReplayResponse
 )
 from ..core.executor import WorkflowExecutor
 
@@ -292,6 +293,109 @@ async def execute_workflow_background(
             )
 
 
+async def execute_from_checkpoint_background(
+    execution_id: UUID,
+    workflow_graph: dict,
+    checkpoint: str,
+    from_step_id: str,
+    llm_model: str,
+    system_prompt: str | None,
+    temperature: float,
+):
+    """
+    Background task to execute workflow from a checkpoint.
+    """
+    from shared.database import async_session_factory
+    from ..websocket import manager
+
+    start_time = datetime.now(timezone.utc)
+
+    async with async_session_factory() as db:
+        # Update status to running
+        await db.execute(
+            update(AgentExecution)
+            .where(AgentExecution.id == execution_id)
+            .values(status="running")
+        )
+        await db.commit()
+
+        # Notify WebSocket clients that execution started
+        await manager.send_execution_status(
+            execution_id=str(execution_id),
+            status="running"
+        )
+
+        try:
+            # Create executor and run from checkpoint
+            executor = WorkflowExecutor(
+                graph_json=workflow_graph,
+                llm_config={
+                    "model": llm_model,
+                    "system_prompt": system_prompt,
+                    "temperature": temperature,
+                },
+                execution_id=execution_id
+            )
+
+            result = await executor.execute_from_checkpoint(checkpoint, from_step_id)
+
+            end_time = datetime.now(timezone.utc)
+            duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+            # Update with success
+            await db.execute(
+                update(AgentExecution)
+                .where(AgentExecution.id == execution_id)
+                .values(
+                    status="completed",
+                    output_data=result.output,
+                    execution_log=result.logs,
+                    execution_steps=result.execution_steps,
+                    token_usage=result.token_usage,
+                    total_api_calls=result.api_calls,
+                    duration_ms=duration_ms,
+                )
+            )
+
+            # Increment workflow run count
+            await db.execute(
+                update(AgentWorkflow)
+                .where(AgentWorkflow.id == AgentExecution.workflow_id)
+                .values(run_count=AgentWorkflow.run_count + 1)
+            )
+
+            await db.commit()
+
+            # Notify WebSocket clients that execution completed
+            await manager.send_execution_status(
+                execution_id=str(execution_id),
+                status="completed"
+            )
+
+        except Exception as e:
+            end_time = datetime.now(timezone.utc)
+            duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+            # Update with failure
+            await db.execute(
+                update(AgentExecution)
+                .where(AgentExecution.id == execution_id)
+                .values(
+                    status="failed",
+                    error_message=str(e),
+                    duration_ms=duration_ms,
+                )
+            )
+            await db.commit()
+
+            # Notify WebSocket clients that execution failed
+            await manager.send_execution_status(
+                execution_id=str(execution_id),
+                status="failed",
+                error_message=str(e)
+            )
+
+
 @router.post("/{execution_id}/cancel", status_code=200)
 async def cancel_execution(
     execution_id: UUID,
@@ -304,20 +408,126 @@ async def cancel_execution(
         select(AgentExecution).where(AgentExecution.id == execution_id)
     )
     execution = result.scalar_one_or_none()
-    
+
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-    
+
     if execution.status not in ["pending", "running"]:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot cancel execution with status: {execution.status}"
         )
-    
+
     execution.status = "cancelled"
     await db.commit()
-    
+
     return {"status": "cancelled", "execution_id": str(execution_id)}
+
+
+@router.post("/{execution_id}/replay", response_model=ExecutionReplayResponse, status_code=201)
+async def replay_execution(
+    execution_id: UUID,
+    replay_request: ExecutionReplayRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Replay execution from a specific step using checkpoint state.
+
+    This endpoint:
+    1. Fetches the original execution and its checkpoint at the specified step
+    2. Creates a new execution record linked to the original
+    3. Restores workflow state from checkpoint
+    4. Resumes execution from the specified step in background
+
+    Args:
+        execution_id: ID of the original execution to replay from
+        replay_request: Contains from_step_id to resume from
+        background_tasks: FastAPI background tasks
+        db: Database session
+
+    Returns:
+        ExecutionReplayResponse with new execution ID and metadata
+    """
+    # Fetch original execution
+    result = await db.execute(
+        select(AgentExecution).where(AgentExecution.id == execution_id)
+    )
+    original_execution = result.scalar_one_or_none()
+
+    if not original_execution:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    # Verify execution has completed (has execution_steps)
+    if not original_execution.execution_steps:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot replay: execution has no step data"
+        )
+
+    # Find the step to replay from
+    from_step_id = replay_request.from_step_id
+    checkpoint_data = None
+
+    for step in original_execution.execution_steps:
+        if step.get("node_id") == from_step_id:
+            checkpoint_data = step.get("checkpoint")
+            break
+
+    if checkpoint_data is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No checkpoint found for step '{from_step_id}'"
+        )
+
+    # Get the workflow
+    workflow_result = await db.execute(
+        select(AgentWorkflow).where(AgentWorkflow.id == original_execution.workflow_id)
+    )
+    workflow = workflow_result.scalar_one_or_none()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Create new execution record linked to original
+    new_execution = AgentExecution(
+        workflow_id=workflow.id,
+        user_id=original_execution.user_id,
+        parent_execution_id=execution_id,
+        replayed_from_step=from_step_id,
+        status="pending",
+        input_data=original_execution.input_data,
+        trigger_type="replay",
+        trigger_metadata={
+            "parent_execution_id": str(execution_id),
+            "replayed_from_step": from_step_id,
+        },
+        execution_log=[],
+    )
+
+    db.add(new_execution)
+    await db.commit()
+    await db.refresh(new_execution)
+
+    # Execute from checkpoint in background
+    background_tasks.add_task(
+        execute_from_checkpoint_background,
+        execution_id=new_execution.id,
+        workflow_graph=workflow.graph_json,
+        checkpoint=checkpoint_data,
+        from_step_id=from_step_id,
+        llm_model=workflow.llm_model,
+        system_prompt=workflow.system_prompt,
+        temperature=workflow.temperature,
+    )
+
+    return ExecutionReplayResponse(
+        new_execution_id=new_execution.id,
+        parent_execution_id=execution_id,
+        replayed_from_step=from_step_id,
+        status="pending",
+        message=f"Replay started from step '{from_step_id}'",
+    )
 
 
 @router.post("/run-sync", response_model=ExecutionResponse)
