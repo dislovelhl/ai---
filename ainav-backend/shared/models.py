@@ -22,6 +22,15 @@ tool_scenarios = Table(
 )
 
 
+# Junction table for LearningPath and Tools (recommended tools)
+learning_path_tools = Table(
+    "learning_path_tools",
+    Base.metadata,
+    Column("learning_path_id", UUID(as_uuid=True), ForeignKey("learning_paths.id"), primary_key=True),
+    Column("tool_id", UUID(as_uuid=True), ForeignKey("tools.id"), primary_key=True),
+)
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -121,10 +130,11 @@ class LearningPath(Base, TimestampMixin):
     prerequisites = Column(JSON, default=list)  # ["Python basics", "SQL fundamentals"]
     learning_outcomes = Column(JSON, default=list)  # ["Build REST APIs", "Deploy to cloud"]
 
-    # Relationship to modules
+    # Relationships
     modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
     user_progress = relationship("UserLearningProgress", back_populates="learning_path", cascade="all, delete-orphan")
     certificates = relationship("LearningCertificate", back_populates="learning_path", cascade="all, delete-orphan")
+    recommended_tools = relationship("Tool", secondary=learning_path_tools)
 
 
 class LearningPathModule(Base, TimestampMixin):
