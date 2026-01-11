@@ -8,10 +8,15 @@ import {
   EdgeLabelRenderer,
 } from "@xyflow/react";
 import { Plus } from "lucide-react";
-import { useFlowStore } from "@/stores/flowStore";
+import {
+  useFlowStore,
+  getConnectionType,
+  getConnectionStyle,
+} from "@/stores/flowStore";
 
 /**
- * AnimatedEdge - Custom edge with a "Packet" animation effect and hover detection.
+ * AnimatedEdge - Custom edge with different visual styles based on connection type.
+ * Supports data (solid blue), control (dashed green), and error (dotted red) connections.
  */
 export function AnimatedEdge({
   id,
@@ -44,6 +49,10 @@ export function AnimatedEdge({
 
   const isAnimating = data?.isAnimating ?? false;
 
+  // Get connection type and style configuration
+  const connectionType = getConnectionType(data);
+  const connectionStyle = getConnectionStyle(connectionType);
+
   return (
     <>
       <path
@@ -61,15 +70,18 @@ export function AnimatedEdge({
         markerEnd={markerEnd}
         style={{
           ...style,
-          strokeWidth: isHovered ? 3 : 2,
+          strokeWidth: isHovered
+            ? connectionStyle.strokeWidth + 1
+            : connectionStyle.strokeWidth,
           stroke: isHovered
-            ? "hsl(var(--primary))"
+            ? connectionStyle.color
             : isAnimating
-            ? "hsl(var(--primary))"
-            : "hsl(var(--muted-foreground) / 0.3)",
+            ? connectionStyle.color
+            : `${connectionStyle.color.replace(")", " / 0.5)")}`,
+          strokeDasharray: connectionStyle.strokeDasharray,
           transition: "all 0.3s ease",
           filter: isHovered
-            ? "drop-shadow(0 0 4px hsl(var(--primary) / 0.5))"
+            ? `drop-shadow(0 0 4px ${connectionStyle.color.replace(")", " / 0.5)")})`
             : "none",
         }}
       />
@@ -93,7 +105,7 @@ export function AnimatedEdge({
           </defs>
           <circle
             r="5"
-            fill="hsl(var(--primary))"
+            fill={connectionStyle.animationColor}
             filter={`url(#glow-${id})`}
             style={{ willChange: "transform" }}
           >
