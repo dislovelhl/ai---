@@ -15,6 +15,8 @@ class TimestampSchema(BaseModel):
 class ScenarioBase(BaseModel):
     name: str = Field(..., max_length=100)
     slug: str = Field(..., max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
     model_config = ConfigDict(from_attributes=True)
@@ -25,6 +27,8 @@ class ScenarioCreate(ScenarioBase):
 class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
     slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
 class ScenarioRead(ScenarioBase, TimestampSchema):
