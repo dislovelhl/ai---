@@ -1,0 +1,28 @@
+
+## Subtask 2.1 Completed - 2026-01-11 10:51:01
+
+Created Pydantic schemas for tool comparisons.
+
+### What was done:
+- Created app/schemas/ directory with proper structure
+- Implemented ComparisonBase with validation for 2-4 unique tool IDs
+- Created ComparisonCreate schema for API input
+- Created ComparisonResponse schema for basic responses
+- Added ToolComparisonInfo schema for tool details in comparisons
+- Created ComparisonDetail schema with full tool information
+- Added ComparisonSummary for lightweight listings
+- Added PaginatedComparisonsResponse for history endpoint
+- All schemas follow existing Pydantic v2 patterns (ConfigDict, from_attributes=True)
+- Validation logic tested successfully:
+  * Valid 2-4 tools ✓
+  * Rejects < 2 tools ✓
+  * Rejects > 4 tools ✓
+  * Rejects duplicate tools ✓
+
+### Files created:
+- ainav-backend/services/content_service/app/schemas/__init__.py
+- ainav-backend/services/content_service/app/schemas/comparison.py
+
+### Next subtask:
+2.2 - Implement POST /v1/comparisons endpoint
+

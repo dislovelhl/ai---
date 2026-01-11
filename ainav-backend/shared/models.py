@@ -18,6 +18,17 @@ except ImportError:
     # pgvector not installed - will fail at runtime if Vector columns are accessed
     Vector = None
 
+# Optional import for vector support
+try:
+    from pgvector.sqlalchemy import Vector
+    PGVECTOR_AVAILABLE = True
+except ImportError:
+    # If pgvector is not available, create a dummy Vector type
+    PGVECTOR_AVAILABLE = False
+    def Vector(dim):
+        """Dummy Vector type when pgvector is not installed"""
+        return Text  # Fallback to Text column
+
 Base = declarative_base()
 
 
@@ -290,6 +301,28 @@ class LearningCertificate(Base, TimestampMixin):
     # Relationships
     user = relationship("User", back_populates="certificates")
     learning_path = relationship("LearningPath", back_populates="certificates")
+
+
+class ToolComparison(Base, TimestampMixin):
+    """
+    ToolComparison: Stores user-created tool comparisons for side-by-side evaluation.
+    Allows users to compare 2-4 tools and share comparisons via unique links.
+    """
+    __tablename__ = "tool_comparisons"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Comparison metadata
+    title = Column(String(255), nullable=True)  # Optional user-defined title
+    tool_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=False)  # Array of 2-4 tool UUIDs
+
+    # Sharing configuration
+    share_token = Column(String(100), unique=True, index=True, nullable=False)  # Unique token for public sharing
+    is_public = Column(Boolean, default=False)  # Whether comparison is publicly accessible
+
+    # Relationship
+    user = relationship("User")
 
 
 # =============================================================================
