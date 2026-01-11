@@ -112,11 +112,20 @@ export const InputNode = memo(function InputNode({
         )}
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!w-3 !h-3 !bg-background !border-2 !border-emerald-600 !-right-1.5"
-      />
+      {/* Data output handle with visual indicator */}
+      <div className="absolute -right-2 top-1/2 -translate-y-1/2 group">
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="data"
+          className="!static !transform-none !w-4 !h-4 !bg-background !border-2 !border-blue-500 !rounded-full hover:!border-blue-600 transition-all hover:!scale-110"
+          title="Data output: Text, JSON, or numbers"
+        />
+        {/* Outer glow ring */}
+        <div className="absolute inset-0 -z-10 w-4 h-4 rounded-full bg-blue-500/30 group-hover:bg-blue-500/50 transition-colors" />
+        {/* Pulsing indicator ring on hover */}
+        <div className="absolute -inset-1 -z-20 w-6 h-6 -left-1 -top-1 rounded-full border-2 border-blue-400/50 opacity-0 group-hover:opacity-100 group-hover:animate-ping transition-opacity" />
+      </div>
     </div>
   );
 });
