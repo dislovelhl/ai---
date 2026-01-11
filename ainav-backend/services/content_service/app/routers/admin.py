@@ -178,3 +178,84 @@ async def delete_category_admin(
         raise HTTPException(status_code=404, detail="Category not found")
 
     return {"message": "Category deleted successfully", "id": str(category_id)}
+
+
+# ==================== Scenario Admin Endpoints ====================
+
+@router.post("/scenarios", response_model=ScenarioRead)
+async def create_scenario_admin(
+    scenario_in: ScenarioCreate,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Create a new scenario (Admin only).
+
+    Validates that the slug is unique before creating.
+    """
+    repo = ScenarioRepository(db)
+
+    # Check if slug already exists
+    existing = await repo.get_by_slug(scenario_in.slug)
+    if existing:
+        raise HTTPException(status_code=400, detail="Slug already exists")
+
+    # Create scenario
+    dict_data = scenario_in.model_dump()
+    return await repo.create(**dict_data)
+
+
+@router.put("/scenarios/{scenario_id}", response_model=ScenarioRead)
+async def update_scenario_admin(
+    scenario_id: UUID4,
+    scenario_in: ScenarioUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Update an existing scenario (Admin only).
+
+    Supports partial updates.
+    """
+    repo = ScenarioRepository(db)
+
+    # Check if scenario exists
+    existing_scenario = await repo.get_by_id(scenario_id)
+    if not existing_scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    # Extract update data (exclude unset fields for partial updates)
+    update_data = scenario_in.model_dump(exclude_unset=True)
+
+    # Update scenario
+    if update_data:
+        scenario = await repo.update(scenario_id, **update_data)
+        if not scenario:
+            raise HTTPException(status_code=404, detail="Scenario not found")
+        return scenario
+
+    # If no updates, return existing scenario
+    return existing_scenario
+
+
+@router.delete("/scenarios/{scenario_id}")
+async def delete_scenario_admin(
+    scenario_id: UUID4,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Delete a scenario (Admin only).
+    """
+    repo = ScenarioRepository(db)
+
+    # Check if scenario exists
+    existing_scenario = await repo.get_by_id(scenario_id)
+    if not existing_scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    success = await repo.delete(scenario_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    return {"message": "Scenario deleted successfully", "id": str(scenario_id)}
