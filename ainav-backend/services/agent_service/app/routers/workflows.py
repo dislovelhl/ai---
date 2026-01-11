@@ -334,6 +334,7 @@ async def update_workflow(
 @router.delete("/{workflow_id}", status_code=204)
 async def delete_workflow(
     workflow_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -343,12 +344,14 @@ async def delete_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
-    
+
+    # Verify ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this workflow")
+
     await db.delete(workflow)
     await db.commit()
 
