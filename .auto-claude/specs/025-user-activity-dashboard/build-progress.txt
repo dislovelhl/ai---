@@ -109,3 +109,49 @@ Ready to begin implementation starting with Phase 1, Subtask 1.1 (Create dashboa
 - `ainav-backend/services/user_service/app/main.py` (registered dashboard router)
 
 **Next up:** Subtask 1.3 - Add saved/starred items endpoints
+
+---
+
+### Subtask 1.3: Add saved/starred items endpoints ✅ COMPLETED
+
+**What was done:**
+- Implemented `GET /v1/dashboard/saved` endpoint to retrieve all starred items
+  - Returns starred tools and workflows grouped by type
+  - Includes `starred_at` timestamp from UserInteraction records
+  - Batch fetches related Tool and AgentWorkflow records for efficiency
+  - Prevents N+1 query issues by collecting IDs first, then batch loading
+- Implemented `POST /v1/dashboard/star` endpoint to toggle star status
+  - Creates UserInteraction with `action='star'` when starring an item
+  - Deletes UserInteraction when unstarring an item
+  - Automatically updates `AgentWorkflow.star_count` when starring/unstarring workflows
+  - Returns success status and new starred state in response
+- **Design Decision**: Used existing UserInteraction model with `action='star'` instead of creating a separate starred_items table
+  - Consistent with existing interaction tracking patterns
+  - Simpler schema without additional table
+  - Leverages existing timestamps and metadata capabilities
+- All code follows existing patterns from the activity endpoint
+- Syntax validation passed
+
+**Implementation details:**
+1. **GET /saved endpoint**:
+   - Query UserInteraction where action='star' for current user
+   - Separate tool IDs and workflow IDs from interactions
+   - Create timestamp maps for starred_at dates
+   - Batch fetch Tool and AgentWorkflow records
+   - Build response objects with full item details + starred_at
+   - Return SavedItemsResponse with tools, workflows, and total count
+
+2. **POST /star endpoint**:
+   - Check if item is already starred
+   - If starred: delete interaction, decrement workflow.star_count if applicable
+   - If not starred: create interaction, increment workflow.star_count if applicable
+   - Return toggle response with new starred state
+
+**Files modified:**
+- `ainav-backend/services/user_service/app/routers/dashboard.py` (added two endpoints)
+
+**Endpoints available:**
+- `GET /v1/dashboard/saved` - Get all starred items
+- `POST /v1/dashboard/star` - Toggle star status (accepts item_type and item_id)
+
+**Next up:** Subtask 1.4 - Build recommendation algorithm
