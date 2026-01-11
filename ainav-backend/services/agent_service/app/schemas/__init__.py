@@ -24,6 +24,13 @@ class SkillBase(BaseModel):
     headers_template: Optional[dict[str, Any]] = None
     auth_type: str = Field(default="none", max_length=50)
     auth_config: Optional[dict[str, Any]] = None
+    # Documentation fields
+    rate_limit: Optional[dict[str, Any]] = None
+    pricing_tier: Optional[str] = Field(None, max_length=50)
+    pricing_details: Optional[dict[str, Any]] = None
+    code_examples: Optional[dict[str, Any]] = None
+    sample_request: Optional[dict[str, Any]] = None
+    sample_response: Optional[dict[str, Any]] = None
 
 
 class SkillCreate(SkillBase):
@@ -43,6 +50,13 @@ class SkillUpdate(BaseModel):
     auth_type: Optional[str] = Field(None, max_length=50)
     auth_config: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
+    # Documentation fields
+    rate_limit: Optional[dict[str, Any]] = None
+    pricing_tier: Optional[str] = Field(None, max_length=50)
+    pricing_details: Optional[dict[str, Any]] = None
+    code_examples: Optional[dict[str, Any]] = None
+    sample_request: Optional[dict[str, Any]] = None
+    sample_response: Optional[dict[str, Any]] = None
 
 
 class SkillResponse(SkillBase):
