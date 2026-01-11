@@ -58,6 +58,7 @@ export function AgentCanvas() {
     onNodesChange,
     onEdgesChange,
     onConnect,
+    isValidConnection,
     selectNode,
     addNode,
     preview,
@@ -165,6 +166,7 @@ export function AgentCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}

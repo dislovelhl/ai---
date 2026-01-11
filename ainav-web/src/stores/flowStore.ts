@@ -125,6 +125,76 @@ export function getConnectionStyle(
   return CONNECTION_TYPE_STYLES[connectionType];
 }
 
+// Helper function to determine connection type from handle IDs
+export function determineConnectionType(
+  sourceHandleId: string | null | undefined,
+  targetHandleId: string | null | undefined
+): ConnectionType {
+  // Handle IDs can be: "data", "control", "error"
+  // If no handle ID specified, default to "data"
+
+  const sourceType = sourceHandleId as ConnectionType | null | undefined;
+  const targetType = targetHandleId as ConnectionType | null | undefined;
+
+  // Error handles take precedence (error handling flow)
+  if (sourceType === "error" || targetType === "error") {
+    return "error";
+  }
+
+  // Control handles for execution flow
+  if (sourceType === "control" || targetType === "control") {
+    return "control";
+  }
+
+  // Default to data flow
+  return "data";
+}
+
+// Helper function to validate if a connection is allowed
+export function isValidConnection(
+  connection: Connection,
+  nodes: AppNode[]
+): boolean {
+  // Prevent self-connections
+  if (connection.source === connection.target) {
+    return false;
+  }
+
+  // Get source and target nodes
+  const sourceNode = nodes.find((n) => n.id === connection.source);
+  const targetNode = nodes.find((n) => n.id === connection.target);
+
+  if (!sourceNode || !targetNode) {
+    return false;
+  }
+
+  // Determine connection type
+  const connectionType = determineConnectionType(
+    connection.sourceHandle,
+    connection.targetHandle
+  );
+
+  // Validate based on connection type
+  switch (connectionType) {
+    case "data":
+      // Data connections are generally allowed between all node types
+      return true;
+
+    case "control":
+      // Control connections should connect execution flow
+      // For now, allow all but could be restricted based on node types
+      return true;
+
+    case "error":
+      // Error connections should only connect to error-handling nodes
+      // For now, allow all but could validate target node supports error handling
+      return true;
+
+    default:
+      return true;
+  }
+}
+
 // Node data types - must extend Record<string, unknown> for React Flow
 export interface BaseNodeData extends Record<string, unknown> {
   label?: string;
@@ -238,6 +308,7 @@ interface FlowState {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
+  isValidConnection: (connection: Connection) => boolean;
 
   // Actions
   addNode: (
@@ -397,14 +468,36 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     });
   },
 
+  // Validate connection
+  isValidConnection: (connection: Connection) => {
+    const nodes = get().nodes;
+    return isValidConnection(connection, nodes);
+  },
+
   // Connect nodes
   onConnect: (connection: Connection) => {
+    const nodes = get().nodes;
     const edges = get().edges;
+
+    // Validate connection
+    if (!isValidConnection(connection, nodes)) {
+      return;
+    }
+
+    // Determine connection type from handles
+    const connectionType = determineConnectionType(
+      connection.sourceHandle,
+      connection.targetHandle
+    );
+
     const nextEdges = addEdge(
       {
         ...connection,
         type: "animated",
-        data: { isAnimating: false },
+        data: {
+          isAnimating: false,
+          connectionType,
+        },
       },
       edges
     );
