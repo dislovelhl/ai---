@@ -242,20 +242,73 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+# =============================================================================
+# SUBSCRIPTION & BILLING MODELS
+# =============================================================================
+
+class SubscriptionPlan(Base, TimestampMixin):
+    """
+    SubscriptionPlan: Defines tiered subscription plans with execution limits and pricing.
+    Supports Chinese payment methods via Stripe (Alipay, WeChat Pay).
+    """
+    __tablename__ = "subscription_plans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Plan identification
+    name = Column(String(100), nullable=False, unique=True)  # e.g., "Free", "Pro"
+    name_zh = Column(String(100), nullable=False)  # e.g., "免费版", "专业版"
+    slug = Column(String(100), unique=True, index=True, nullable=False)  # e.g., "free", "pro"
+    description = Column(Text)
+    description_zh = Column(Text)
+
+    # Tier level (for easy comparison)
+    tier = Column(String(50), nullable=False, index=True)  # 'free', 'pro', 'enterprise'
+
+    # Execution limits
+    daily_execution_limit = Column(Integer, nullable=False, default=50)  # Executions per day
+    monthly_execution_limit = Column(Integer, nullable=False, default=1500)  # Executions per month
+
+    # Pricing (in CNY - Chinese Yuan)
+    price_monthly = Column(Float, nullable=False, default=0.0)  # Monthly price in CNY
+    price_yearly = Column(Float, nullable=False, default=0.0)  # Yearly price in CNY (with discount)
+
+    # Stripe integration
+    stripe_price_id_monthly = Column(String(255), nullable=True)  # Stripe Price ID for monthly billing
+    stripe_price_id_yearly = Column(String(255), nullable=True)  # Stripe Price ID for yearly billing
+    stripe_product_id = Column(String(255), nullable=True)  # Stripe Product ID
+
+    # Features (stored as JSON for flexibility)
+    features = Column(JSON)  # {"priority_support": true, "advanced_analytics": true, etc.}
+    features_zh = Column(JSON)  # Chinese feature descriptions
+
+    # Chinese payment method support
+    supports_alipay = Column(Boolean, default=True)
+    supports_wechat_pay = Column(Boolean, default=True)
+
+    # Plan settings
+    is_active = Column(Boolean, default=True)
+    is_popular = Column(Boolean, default=False)  # Highlight as "most popular"
+    display_order = Column(Integer, default=0)  # For sorting on pricing page
+
+    # Priority level for execution queue
+    priority_level = Column(Integer, default=0)  # 0=normal, 1=high, 2=critical
