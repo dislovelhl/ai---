@@ -66,6 +66,7 @@ ainav-web/.npm/
 studio.html
 *.coverage
 .coverage
+.coverage.json
 coverage.xml
 htmlcov/
 .coverage.*

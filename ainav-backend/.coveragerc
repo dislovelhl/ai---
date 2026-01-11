@@ -1,0 +1,89 @@
+[run]
+# Measure coverage for these packages
+source = services, shared
+
+# Omit these files from coverage
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+    */venv/*
+    */virtualenv/*
+    */.venv/*
+    # Exclude migration files
+    */alembic/*
+    # Exclude seed and verification scripts
+    seed_*.py
+    verify_*.py
+    manual_sync.py
+    test_db.py
+
+# Enable branch coverage
+branch = True
+
+# Concurrency support for async code
+concurrency = thread
+
+[report]
+# Precision for coverage percentage
+precision = 2
+
+# Show missing lines
+show_missing = True
+
+# Skip covered files in report
+skip_covered = False
+
+# Skip empty files
+skip_empty = True
+
+# Fail if coverage is below this percentage
+# fail_under = 70
+
+# Ignore errors for source files that can't be found
+ignore_errors = False
+
+# Exclude lines from coverage (e.g., debugging code, abstract methods)
+exclude_lines =
+    # Standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug code
+    def __repr__
+    if self\.debug
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if 0:
+    if False:
+    if __name__ == .__main__.:
+
+    # Don't complain about abstract methods
+    @(abc\.)?abstractmethod
+
+    # Type checking blocks
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+    # Ellipsis for protocol/abstract classes
+    \.\.\.
+
+    # Pass statements
+    pass
+
+[html]
+# Directory for HTML coverage report
+directory = htmlcov
+
+# Title for HTML report
+title = AI Navigation Platform - Test Coverage Report
+
+[json]
+# Output file for JSON coverage report
+output = .coverage.json
+pretty_print = True
+show_contexts = True

@@ -34,15 +34,21 @@
 **Installed:**
 - pytest 7.4.4
 - pytest-cov 4.1.0
-- pytest-asyncio 0.20.3
+- pytest-asyncio 0.23.0
+- pytest-mock 3.12.0
 
-**Missing:**
-- ❌ pytest.ini configuration
-- ❌ conftest.py with shared fixtures
-- ❌ Test database setup
-- ❌ Mocking infrastructure
-- ❌ Unit tests
-- ❌ CI/CD integration
+**Configured:**
+- ✅ pytest.ini configuration with coverage settings
+- ✅ conftest.py with shared fixtures
+- ✅ .coveragerc for coverage reporting
+- ✅ Test environment setup
+- ✅ Async testing support
+- ✅ Mock fixtures for Redis, Meilisearch, Celery, LLM
+
+**In Progress:**
+- ⏳ Test database setup (subtask 1.3)
+- ⏳ Unit tests
+- ⏳ CI/CD integration
 
 ### Coverage Goals
 
@@ -58,26 +64,96 @@
 ### Running Tests
 
 ```bash
-# Run all tests
-pytest tests/ -v
+# Run all tests (pytest.ini handles coverage automatically)
+pytest
 
-# Run with coverage
-pytest tests/ --cov=services --cov=shared --cov-report=term-missing
+# Run tests with verbose output
+pytest -v
 
 # Run specific test file
 pytest tests/test_content_crud.py -v
+
+# Run tests by marker
+pytest -m unit          # Only unit tests
+pytest -m integration   # Only integration tests
+pytest -m "not slow"    # Skip slow tests
+
+# Run tests with specific coverage output
+pytest --cov-report=html    # Generate HTML coverage report
+pytest --cov-report=term    # Terminal output only
+
+# Run tests without coverage (faster for development)
+pytest --no-cov
+
+# Run specific test function
+pytest tests/test_content_crud.py::test_categories_crud -v
+```
+
+### Using Test Fixtures
+
+The `conftest.py` provides many useful fixtures:
+
+**Database Fixtures:**
+```python
+async def test_create_user(db_session: AsyncSession):
+    """Test using database session with automatic rollback."""
+    user = User(username="test")
+    db_session.add(user)
+    await db_session.commit()
+    # Changes automatically rolled back after test
+```
+
+**HTTP Client Fixtures:**
+```python
+async def test_api_endpoint(async_client: AsyncClient):
+    """Test using async HTTP client."""
+    response = await async_client.get("/v1/health")
+    assert response.status_code == 200
+```
+
+**Mock Fixtures:**
+```python
+def test_with_mocks(mock_redis, mock_meilisearch, mock_celery):
+    """Test using mocked external services."""
+    mock_redis.get.return_value = "cached_value"
+    # Your test code here
+```
+
+**Data Factories:**
+```python
+def test_create_category(category_factory, db_session):
+    """Test using data factories."""
+    category_data = category_factory(name="Custom Category")
+    # Use category_data in your test
 ```
 
 **Note:** Current integration tests require services to be running. Future unit tests will work in isolation with mocks.
 
 ### Next Steps
 
-1. Setup pytest infrastructure (pytest.ini, conftest.py)
-2. Create test database configuration
+1. ✅ Setup pytest infrastructure (pytest.ini, conftest.py) - **COMPLETED**
+2. Create test database configuration (subtask 1.3)
 3. Implement unit tests for shared models
 4. Add auth and JWT middleware tests
 5. Implement workflow and execution engine tests
 6. Setup CI/CD pipeline
+
+### Pytest Configuration
+
+**pytest.ini** includes:
+- Automatic test discovery (`test_*.py` pattern)
+- Coverage reporting for `services/` and `shared/`
+- HTML and JSON coverage reports
+- Test markers for categorization (unit, integration, slow, auth, etc.)
+- Asyncio mode set to auto
+- Strict marker and config validation
+
+**conftest.py** provides:
+- Database fixtures with transaction rollback
+- Async HTTP client fixtures
+- Mock fixtures for external services
+- Data factory fixtures for common models
+- Test environment configuration
 
 ---
 
