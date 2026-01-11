@@ -14,6 +14,11 @@ from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
+from ..dependencies import get_current_user_id
+from ..schemas import (
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse,
+    WorkflowSummary, PaginatedWorkflowsResponse
+)
 
 router = APIRouter()
 planner = PlannerAgent()
@@ -246,20 +251,12 @@ async def get_workflow_by_slug(
 @router.post("", response_model=WorkflowResponse, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Create a new agent workflow.
     """
-    # TODO: Get user_id from auth
-    # For now, use a placeholder or first user
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available. Please create a user first.")
-    
     # Check slug uniqueness
     existing = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == workflow_data.slug)
@@ -267,17 +264,17 @@ async def create_workflow(
     if existing.scalar_one_or_none():
         # Append unique suffix
         workflow_data.slug = f"{workflow_data.slug}-{str(uuid4())[:8]}"
-    
+
     # Convert graph_json from Pydantic model to dict
     data = workflow_data.model_dump()
     data['graph_json'] = workflow_data.graph_json.model_dump()
-    data['user_id'] = user.id
-    
+    data['user_id'] = user_id
+
     workflow = AgentWorkflow(**data)
     db.add(workflow)
     await db.commit()
     await db.refresh(workflow)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
