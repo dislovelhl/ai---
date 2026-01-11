@@ -78,7 +78,12 @@ export function MobileMenu() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="lg:hidden h-11 w-11 min-h-[44px] min-w-[44px]"
+          aria-label="打开菜单"
+        >
           <Menu className="h-6 w-6" />
           <span className="sr-only">打开菜单</span>
         </Button>
@@ -120,14 +125,14 @@ export function MobileMenu() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 h-11 min-h-[44px]"
                   onClick={() => handleNavigation("/login")}
                 >
                   <LogIn className="mr-2 h-4 w-4" />
                   登录
                 </Button>
                 <Button
-                  className="flex-1"
+                  className="flex-1 h-11 min-h-[44px]"
                   onClick={() => handleNavigation("/register")}
                 >
                   <UserPlus className="mr-2 h-4 w-4" />
@@ -206,7 +211,7 @@ export function MobileMenu() {
             <div className="p-4 border-t">
               <Button
                 variant="ghost"
-                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 h-11 min-h-[44px]"
                 onClick={handleLogout}
               >
                 <LogOut className="mr-2 h-5 w-5" />
