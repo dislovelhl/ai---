@@ -222,12 +222,16 @@ export default function ToolDetailPage() {
                 </section>
               )}
 
-              {/* Tool Alternatives */}
-              <ToolAlternatives
-                alternatives={alternatives?.alternatives || []}
-                isLoading={alternativesLoading}
-                originalToolRequiresVpn={tool.requires_vpn}
-              />
+              {/* Tool Alternatives - Only show if loading or alternatives exist */}
+              {(alternativesLoading ||
+                (alternatives?.alternatives &&
+                  alternatives.alternatives.length > 0)) && (
+                <ToolAlternatives
+                  alternatives={alternatives?.alternatives || []}
+                  isLoading={alternativesLoading}
+                  originalToolRequiresVpn={tool.requires_vpn}
+                />
+              )}
             </div>
 
             {/* Right Column: Stats & Sidebar */}
