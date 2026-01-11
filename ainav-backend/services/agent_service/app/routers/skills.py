@@ -8,12 +8,16 @@ from sqlalchemy.orm import selectinload
 from typing import Optional
 from uuid import UUID
 import math
+import time
+import httpx
+import json
+import os
 
 from shared.database import get_async_session
 from shared.models import Skill, Tool
 from ..schemas import (
     SkillCreate, SkillUpdate, SkillResponse,
-    PaginatedSkillsResponse
+    PaginatedSkillsResponse, SkillTestRequest, SkillTestResponse
 )
 
 router = APIRouter()
@@ -193,7 +197,7 @@ async def delete_skill(
     
     tool_id = skill.tool_id
     await db.delete(skill)
-    
+
     # Check if tool still has any skills
     remaining = await db.execute(
         select(func.count(Skill.id)).where(Skill.tool_id == tool_id)
@@ -203,5 +207,145 @@ async def delete_skill(
         tool = tool_result.scalar_one_or_none()
         if tool:
             tool.has_api = False
-    
+
     await db.commit()
+
+
+@router.post("/{skill_id}/test", response_model=SkillTestResponse)
+async def test_skill(
+    skill_id: UUID,
+    test_request: SkillTestRequest,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Test a skill with sample data by making an actual HTTP request to the API.
+
+    This endpoint:
+    - Makes a real HTTP request to the skill's api_endpoint
+    - Handles authentication based on auth_config
+    - Tracks execution time
+    - Updates usage_count and avg_latency_ms
+    - Returns response data and status
+    """
+    # Fetch the skill
+    result = await db.execute(select(Skill).where(Skill.id == skill_id))
+    skill = result.scalar_one_or_none()
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    # Validate that skill has API endpoint configured
+    if not skill.api_endpoint:
+        raise HTTPException(status_code=400, detail="Skill has no API endpoint configured")
+
+    # Build request headers
+    headers = skill.headers_template.copy() if skill.headers_template else {}
+
+    # Handle authentication
+    auth_type = skill.auth_type or "none"
+    auth_config = skill.auth_config or {}
+
+    if auth_type == "bearer" and "env_var" in auth_config:
+        token = os.getenv(auth_config["env_var"])
+        if token:
+            header_name = auth_config.get("header", "Authorization")
+            prefix = auth_config.get("prefix", "Bearer")
+            headers[header_name] = f"{prefix} {token}"
+    elif auth_type == "api_key" and "env_var" in auth_config:
+        api_key = os.getenv(auth_config["env_var"])
+        if api_key:
+            header_name = auth_config.get("header", "X-API-Key")
+            headers[header_name] = api_key
+    elif auth_type == "oauth2" and "env_var" in auth_config:
+        token = os.getenv(auth_config["env_var"])
+        if token:
+            header_name = auth_config.get("header", "Authorization")
+            prefix = auth_config.get("prefix", "Bearer")
+            headers[header_name] = f"{prefix} {token}"
+
+    # Prepare request
+    method = (skill.http_method or "GET").upper()
+    endpoint = skill.api_endpoint
+    request_data = test_request.test_data
+
+    # Track execution time
+    start_time = time.time()
+
+    try:
+        # Make HTTP request
+        async with httpx.AsyncClient() as client:
+            if method in ["POST", "PUT", "PATCH"]:
+                response = await client.request(
+                    method=method,
+                    url=endpoint,
+                    json=request_data,
+                    headers=headers,
+                    timeout=30.0
+                )
+            else:
+                response = await client.request(
+                    method=method,
+                    url=endpoint,
+                    params=request_data if isinstance(request_data, dict) else None,
+                    headers=headers,
+                    timeout=30.0
+                )
+
+        execution_time_ms = int((time.time() - start_time) * 1000)
+
+        # Parse response
+        try:
+            response_data = response.json()
+        except json.JSONDecodeError:
+            response_data = response.text
+
+        # Update skill usage statistics
+        skill.usage_count += 1
+
+        # Update average latency using incremental formula
+        if skill.avg_latency_ms == 0:
+            skill.avg_latency_ms = float(execution_time_ms)
+        else:
+            # Weighted average: new_avg = old_avg + (new_value - old_avg) / count
+            skill.avg_latency_ms = skill.avg_latency_ms + (execution_time_ms - skill.avg_latency_ms) / skill.usage_count
+
+        await db.commit()
+
+        # Return success response
+        return SkillTestResponse(
+            success=response.is_success,
+            status_code=response.status_code,
+            response_data=response_data,
+            execution_time_ms=execution_time_ms,
+            error_message=None if response.is_success else f"API returned status {response.status_code}"
+        )
+
+    except httpx.TimeoutException as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        return SkillTestResponse(
+            success=False,
+            status_code=408,
+            response_data=None,
+            execution_time_ms=execution_time_ms,
+            error_message="Request timeout: API did not respond within 30 seconds"
+        )
+
+    except httpx.RequestError as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        return SkillTestResponse(
+            success=False,
+            status_code=503,
+            response_data=None,
+            execution_time_ms=execution_time_ms,
+            error_message=f"Request failed: {str(e)}"
+        )
+
+    except Exception as e:
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        return SkillTestResponse(
+            success=False,
+            status_code=500,
+            response_data=None,
+            execution_time_ms=execution_time_ms,
+            error_message=f"Unexpected error: {str(e)}"
+        )

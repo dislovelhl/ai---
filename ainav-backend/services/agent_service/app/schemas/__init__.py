@@ -260,3 +260,21 @@ class PaginatedExecutionsResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# =============================================================================
+# SKILL TEST SCHEMAS
+# =============================================================================
+
+class SkillTestRequest(BaseModel):
+    """Request schema for testing a skill with sample data."""
+    test_data: dict[str, Any] = Field(default_factory=dict, description="Input parameters to test the skill")
+
+
+class SkillTestResponse(BaseModel):
+    """Response schema for skill test execution."""
+    success: bool = Field(..., description="Whether the test succeeded")
+    status_code: int = Field(..., description="HTTP status code from the API")
+    response_data: Any = Field(..., description="Response data from the API")
+    execution_time_ms: int = Field(..., description="Execution time in milliseconds")
+    error_message: Optional[str] = Field(None, description="Error message if the test failed")
