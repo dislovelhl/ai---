@@ -45,7 +45,7 @@ class BaseRepository(Generic[T]):
         await self.session.commit()
         return result.rowcount > 0
 
-from shared.models import Category, Scenario, Tool, tool_scenarios
+from shared.models import Category, Scenario, Tool, tool_scenarios, LearningPath, LearningPathModule
 
 class CategoryRepository(BaseRepository[Category]):
     def __init__(self, session: AsyncSession):
@@ -108,7 +108,7 @@ class ToolRepository(BaseRepository[Tool]):
         tool = await self.get_by_id_with_relations(tool_id)
         if not tool:
             return
-            
+
         if scenario_ids is not None:
             # Fetch scenarios
             scen_query = select(Scenario).where(Scenario.id.in_(scenario_ids))
@@ -117,3 +117,75 @@ class ToolRepository(BaseRepository[Tool]):
             tool.scenarios = list(result.scalars().all())
             await self.session.commit()
             await self.session.refresh(tool)
+
+class LearningPathRepository(BaseRepository[LearningPath]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(LearningPath, session)
+
+    async def get_all_with_relations(self, skip: int = 0, limit: int = 100) -> List[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).offset(skip).limit(limit)
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
+    async def get_by_slug_with_modules_and_tools(self, slug: str) -> Optional[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.slug == slug)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def create_with_relations(self, tool_ids: List[any] = None, **kwargs) -> LearningPath:
+        # Resolve tools first
+        tools = []
+        if tool_ids:
+            tools_query = select(Tool).where(Tool.id.in_(tool_ids))
+            result = await self.session.execute(tools_query)
+            tools = list(result.scalars().all())
+
+        learning_path = LearningPath(**kwargs)
+        learning_path.recommended_tools = tools
+        self.session.add(learning_path)
+        await self.session.commit()
+
+        # Capture ID safely
+        path_id = learning_path.id
+        return await self.get_by_id_with_relations(path_id)
+
+    async def get_by_id_with_relations(self, id: any) -> Optional[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.id == id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def associate_tools(self, learning_path_id: any, tool_ids: List[any]):
+        # Fetch the learning path with tools properly using existing method
+        learning_path = await self.get_by_id_with_relations(learning_path_id)
+        if not learning_path:
+            return
+
+        if tool_ids is not None:
+            # Fetch tools
+            tools_query = select(Tool).where(Tool.id.in_(tool_ids))
+            result = await self.session.execute(tools_query)
+            # Match tools to learning path
+            learning_path.recommended_tools = list(result.scalars().all())
+            await self.session.commit()
+            await self.session.refresh(learning_path)
+
+    async def get_published_paths(self, skip: int = 0, limit: int = 100) -> List[LearningPath]:
+        from sqlalchemy.orm import selectinload
+        query = select(self.model).options(
+            selectinload(self.model.modules),
+            selectinload(self.model.recommended_tools)
+        ).where(self.model.is_published == True).offset(skip).limit(limit)
+        result = await self.session.execute(query)
+        return result.scalars().all()
