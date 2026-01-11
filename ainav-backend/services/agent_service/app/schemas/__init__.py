@@ -164,6 +164,11 @@ class WorkflowSummary(BaseModel):
         from_attributes = True
 
 
+class WorkflowRevert(BaseModel):
+    """Request to revert a workflow to a previous version."""
+    target_version: int = Field(..., ge=1, description="Version number to revert to")
+
+
 # =============================================================================
 # EXECUTION SCHEMAS
 # =============================================================================

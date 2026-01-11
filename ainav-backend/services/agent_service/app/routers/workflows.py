@@ -20,6 +20,7 @@ from ..schemas import (
     WorkflowResponse,
     WorkflowSummary,
     PaginatedWorkflowsResponse,
+    WorkflowRevert,
 )
 
 router = APIRouter()
@@ -461,12 +462,75 @@ async def get_workflow_versions(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     return {
         "workflow_id": str(workflow.id),
         "current_version": workflow.version or 1,
         "history": workflow.version_history or []
     }
+
+
+@router.post("/{workflow_id}/revert", response_model=WorkflowResponse)
+async def revert_workflow_version(
+    workflow_id: UUID,
+    revert_data: WorkflowRevert,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Revert a workflow to a previous version.
+    Creates a new version entry documenting the revert operation.
+    """
+    from datetime import datetime
+
+    result = await db.execute(
+        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # TODO: Check ownership
+
+    # Find the target version in history
+    target_version = revert_data.target_version
+    version_history = workflow.version_history or []
+
+    target_snapshot = None
+    for entry in version_history:
+        if entry.get("version") == target_version:
+            target_snapshot = entry
+            break
+
+    if not target_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {target_version} not found in workflow history"
+        )
+
+    # Save the CURRENT state to version history before reverting
+    current_version = workflow.version or 1
+    history_entry = {
+        "version": current_version,
+        "timestamp": datetime.utcnow().isoformat(),
+        "notes": f"Version before reverting to v{target_version}",
+        "graph_json": workflow.graph_json,
+        "user_id": str(workflow.user_id)
+    }
+
+    # Append current state to history
+    workflow.version_history = version_history + [history_entry]
+
+    # Revert to the target version's graph_json
+    workflow.graph_json = target_snapshot.get("graph_json")
+
+    # Increment version number
+    workflow.version = current_version + 1
+
+    await db.commit()
+    await db.refresh(workflow)
+
+    return WorkflowResponse.model_validate(workflow)
