@@ -7,6 +7,7 @@ from ..clients.arxiv_miner import ArXivMiner
 from shared.models import Tool, Category
 from shared.config import settings
 from shared.embedding import embedding_service
+from shared.chinese_synonyms import get_synonym_pairs
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -324,17 +325,84 @@ async def _sync_to_meilisearch_pipeline():
         
         if documents:
             index = meili_client.index("tools")
-            # Update settings for searchable attributes and filters
-            # Ensure vector search is enabled or configured if needed (usually implicit with _vectors)
-            index.update_filterable_attributes(["category_slug", "scenario_slugs", "pricing_type", "github_stars"])
-            index.update_searchable_attributes(["name", "name_zh", "description", "category_name", "scenario_names"])
-            
-            # Configure embedding settings if we wanted Meilisearch to do it, but we are doing it manually.
-            # We just need to enable vector search if it is locked behind a flag, but in recent versions it's open.
-            
+
+            # === Chinese-Optimized Search Configuration ===
+            logger.info("Configuring Meilisearch index with Chinese-specific settings...")
+
+            # 1. Set Chinese locale for better tokenization
+            index.update_localized_attributes([
+                {"locales": ["cmn"], "attributePatterns": ["name_zh", "description_zh"]}
+            ])
+
+            # 2. Configure typo tolerance - disable for Chinese characters
+            # Chinese characters don't have typos in the same way as alphabetic languages
+            # Set minWordSizeForTypos very high to effectively disable for short Chinese queries
+            index.update_typo_tolerance({
+                "enabled": True,
+                "minWordSizeForTypos": {
+                    "oneTypo": 255,  # Effectively disable for Chinese
+                    "twoTypos": 255  # Effectively disable for Chinese
+                },
+                "disableOnWords": [],
+                "disableOnAttributes": ["name_zh", "description_zh"]
+            })
+
+            # 3. Upload Chinese AI terminology synonyms
+            synonym_pairs = get_synonym_pairs()
+            index.update_synonyms(synonym_pairs)
+            logger.info(f"Uploaded {len(synonym_pairs)} synonym groups for bilingual search")
+
+            # 4. Configure searchable attributes with Chinese prioritization
+            # Order matters: earlier fields get higher ranking weight
+            index.update_searchable_attributes([
+                "name_zh",           # Prioritize Chinese name (most important for Chinese users)
+                "name",              # English name
+                "description_zh",    # Chinese description
+                "description",       # English description
+                "category_name",     # Category names
+                "scenario_names"     # Scenario names
+            ])
+
+            # 5. Add Chinese punctuation to separator tokens
+            # This helps with proper tokenization of Chinese text
+            index.update_separator_tokens([
+                "、",  # Chinese enumeration comma
+                "。",  # Chinese period
+                "，",  # Chinese comma
+                "：",  # Chinese colon
+                "；",  # Chinese semicolon
+                "！",  # Chinese exclamation
+                "？",  # Chinese question mark
+                "（",  # Chinese left parenthesis
+                "）",  # Chinese right parenthesis
+                "【",  # Chinese left bracket
+                "】",  # Chinese right bracket
+            ])
+
+            # 6. Configure filterable attributes
+            index.update_filterable_attributes([
+                "category_slug",
+                "scenario_slugs",
+                "pricing_type",
+                "github_stars"
+            ])
+
+            # 7. Configure ranking rules (default + custom)
+            # Prioritize exact matches and semantic relevance
+            index.update_ranking_rules([
+                "words",        # Number of matched query terms
+                "typo",         # Fewer typos = higher rank
+                "proximity",    # Proximity of matched terms
+                "attribute",    # Position in searchable attributes list
+                "sort",         # Custom sort (stars, ratings)
+                "exactness"     # Exact matches ranked higher
+            ])
+
+            logger.info("Chinese-optimized index configuration completed")
+
             # Upsert documents
             index.add_documents(documents)
-            logger.info(f"Synced {len(documents)} tools to Meilisearch.")
+            logger.info(f"Synced {len(documents)} tools to Meilisearch with Chinese optimization.")
             return {"status": "success", "synced": len(documents)}
         
         return {"status": "no_tools"}
