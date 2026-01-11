@@ -1,11 +1,19 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
+from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer, Enum
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
+import enum
 
 Base = declarative_base()
+
+
+class UserRole(str, enum.Enum):
+    """User role enum for authorization"""
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    USER = "user"
 
 
 class TimestampMixin:
@@ -31,6 +39,11 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String(255))
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+
+    # Admin and authorization fields
+    is_admin = Column(Boolean, default=False)
+    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    permissions = Column(ARRAY(String), default=list)  # Flexible permissions array
 
     # OAuth provider IDs
     github_id = Column(String(50), unique=True, index=True, nullable=True)
