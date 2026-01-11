@@ -5,6 +5,7 @@ from meilisearch import Client
 from meilisearch.errors import MeilisearchApiError
 from shared.config import settings
 from shared.models import SearchHistory
+from shared.pinyin_utils import to_pinyin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
@@ -12,7 +13,7 @@ from datetime import datetime
 import logging
 
 # Import local dependencies
-from ..auth import require_authentication
+from ..auth import require_authentication, get_current_user_id
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,63 @@ def build_filter_string(filters: List[str]) -> Optional[str]:
     return " AND ".join(filters)
 
 
+async def record_search_history(
+    db: AsyncSession,
+    user_id: Optional[UUID],
+    query: str,
+    result_count: int
+) -> None:
+    """
+    Record a search query to the SearchHistory table for authenticated users.
+
+    Args:
+        db: Database session
+        user_id: User ID (None for anonymous users)
+        query: The search query text
+        result_count: Number of results returned
+
+    Note:
+        Only records history for authenticated users (user_id is not None).
+        Generates pinyin for Chinese queries to improve searchability.
+    """
+    # Only record for authenticated users
+    if user_id is None:
+        return
+
+    # Skip empty queries
+    if not query or not query.strip():
+        return
+
+    try:
+        # Generate pinyin for Chinese queries
+        query_pinyin = None
+        try:
+            pinyin_result = to_pinyin(query.strip())
+            # Only store if different from original (i.e., contained Chinese)
+            if pinyin_result and pinyin_result != query.strip():
+                query_pinyin = pinyin_result
+        except Exception as e:
+            logger.warning(f"Failed to generate pinyin for query '{query}': {e}")
+
+        # Create search history record
+        search_record = SearchHistory(
+            user_id=user_id,
+            query=query.strip(),
+            query_pinyin=query_pinyin,
+            result_count=result_count
+        )
+
+        db.add(search_record)
+        await db.commit()
+
+        logger.debug(f"Recorded search history for user {user_id}: query='{query}', results={result_count}")
+
+    except Exception as e:
+        logger.error(f"Failed to record search history: {e}", exc_info=True)
+        # Don't fail the request if history recording fails
+        await db.rollback()
+
+
 # =============================================================================
 # EXISTING ENDPOINT: Basic Search
 # =============================================================================
@@ -117,11 +175,16 @@ async def search_tools(
     category: Optional[str] = Query(None, description="Filter by category slug"),
     scenario: Optional[str] = Query(None, description="Filter by scenario slug"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100)
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user_id: Optional[UUID] = Depends(get_current_user_id)
 ):
     """
     Search AI tools using Meilisearch.
     Supports filtering and pagination.
+
+    Authentication is optional. If authenticated, search queries will be recorded
+    to search history for personalization and analytics.
     """
     index = client.index("tools")
 
@@ -169,6 +232,11 @@ async def search_tools(
                 # Fallback to keyword search if embedding fails
 
         results = index.search(q, search_params)
+
+        # Record search history for authenticated users
+        result_count = results.get("estimatedTotalHits", 0)
+        await record_search_history(db, user_id, q, result_count)
+
         return results
     except Exception as e:
         logger.error(f"Search error: {e}")
@@ -199,7 +267,9 @@ async def faceted_search(
         description="Filter by category slug"
     ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(20, ge=1, le=100, description="Results per page")
+    page_size: int = Query(20, ge=1, le=100, description="Results per page"),
+    db: AsyncSession = Depends(get_db),
+    user_id: Optional[UUID] = Depends(get_current_user_id)
 ):
     """
     Faceted search for AI tools with aggregated filter counts.
@@ -211,6 +281,9 @@ async def faceted_search(
     - category_slug: Count of tools by category
 
     Use facets to build dynamic filter UIs.
+
+    Authentication is optional. If authenticated, search queries will be recorded
+    to search history for personalization and analytics.
     """
     if not ensure_index_exists("tools"):
         raise HTTPException(
@@ -281,6 +354,10 @@ async def faceted_search(
             category_slug=facet_distribution.get("category_slug", {})
         )
 
+        # Record search history for authenticated users
+        result_count = results.get("estimatedTotalHits", 0)
+        await record_search_history(db, user_id, q, result_count)
+
         return FacetedSearchResponse(
             hits=results.get("hits", []),
             query=q,
@@ -306,13 +383,18 @@ async def faceted_search(
 @router.get("/autocomplete", response_model=AutocompleteResponse)
 async def autocomplete(
     q: str = Query(..., min_length=1, description="Search prefix (at least 1 character)"),
-    limit: int = Query(10, ge=1, le=20, description="Maximum number of suggestions")
+    limit: int = Query(10, ge=1, le=20, description="Maximum number of suggestions"),
+    db: AsyncSession = Depends(get_db),
+    user_id: Optional[UUID] = Depends(get_current_user_id)
 ):
     """
     Fast prefix-based autocomplete suggestions.
 
     Returns lightweight results with only name and slug fields.
     Optimized for real-time typeahead functionality.
+
+    Authentication is optional. If authenticated, search queries will be recorded
+    to search history for personalization and analytics.
 
     Example usage:
     - User types "chat" -> returns ["ChatGPT", "ChatSonic", "Character.AI", ...]
@@ -349,6 +431,10 @@ async def autocomplete(
                 suggestions.append(AutocompleteItem(name=name, slug=slug))
 
         logger.debug(f"Autocomplete for '{q}': {len(suggestions)} suggestions")
+
+        # Record search history for authenticated users
+        result_count = len(suggestions)
+        await record_search_history(db, user_id, q, result_count)
 
         return AutocompleteResponse(
             suggestions=suggestions,
