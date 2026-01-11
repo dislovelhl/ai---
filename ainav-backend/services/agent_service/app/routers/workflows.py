@@ -375,43 +375,52 @@ async def update_workflow(
 ):
     """
     Update an existing workflow.
-    Increments version and records history when graph changes.
+    Increments version and records complete graph snapshot in history when graph changes.
     """
     from datetime import datetime
-    
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Check ownership
-    
+
     update_data = workflow_data.model_dump(exclude_unset=True)
-    
+
     # Handle graph_json conversion if present and track versioning
     if 'graph_json' in update_data and update_data['graph_json']:
-        update_data['graph_json'] = workflow_data.graph_json.model_dump()
-        
-        # Increment version and record history
-        workflow.version = (workflow.version or 1) + 1
+        # Save the CURRENT graph state to version history BEFORE updating
+        current_version = workflow.version or 1
         history_entry = {
-            "version": workflow.version,
+            "version": current_version,
             "timestamp": datetime.utcnow().isoformat(),
-            "changes": "Graph updated"
+            "notes": workflow_data.version_notes or "Graph updated",
+            "graph_json": workflow.graph_json,  # Save the current (old) graph
+            "user_id": str(workflow.user_id)
         }
+
+        # Initialize version_history if needed
         if workflow.version_history is None:
             workflow.version_history = []
+
+        # Append the current version snapshot to history
         workflow.version_history = workflow.version_history + [history_entry]
-    
+
+        # Now increment version and apply the new graph
+        workflow.version = current_version + 1
+        update_data['graph_json'] = workflow_data.graph_json.model_dump()
+
+    # Apply all updates
     for field, value in update_data.items():
         setattr(workflow, field, value)
-    
+
     await db.commit()
     await db.refresh(workflow)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -531,12 +540,203 @@ async def get_workflow_versions(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     return {
         "workflow_id": str(workflow.id),
         "current_version": workflow.version or 1,
         "history": workflow.version_history or []
     }
+
+
+@router.post("/{workflow_id}/revert", response_model=WorkflowResponse)
+async def revert_workflow_version(
+    workflow_id: UUID,
+    revert_data: WorkflowRevert,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Revert a workflow to a previous version.
+    Creates a new version entry documenting the revert operation.
+    """
+    from datetime import datetime
+
+    result = await db.execute(
+        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # TODO: Check ownership
+
+    # Find the target version in history
+    target_version = revert_data.target_version
+    version_history = workflow.version_history or []
+
+    target_snapshot = None
+    for entry in version_history:
+        if entry.get("version") == target_version:
+            target_snapshot = entry
+            break
+
+    if not target_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {target_version} not found in workflow history"
+        )
+
+    # Save the CURRENT state to version history before reverting
+    current_version = workflow.version or 1
+    history_entry = {
+        "version": current_version,
+        "timestamp": datetime.utcnow().isoformat(),
+        "notes": f"Version before reverting to v{target_version}",
+        "graph_json": workflow.graph_json,
+        "user_id": str(workflow.user_id)
+    }
+
+    # Append current state to history
+    workflow.version_history = version_history + [history_entry]
+
+    # Revert to the target version's graph_json
+    workflow.graph_json = target_snapshot.get("graph_json")
+
+    # Increment version number
+    workflow.version = current_version + 1
+
+    await db.commit()
+    await db.refresh(workflow)
+
+    return WorkflowResponse.model_validate(workflow)
+
+
+@router.get("/{workflow_id}/versions/compare", response_model=VersionComparison)
+async def compare_workflow_versions(
+    workflow_id: UUID,
+    v1: int = Query(..., ge=1, description="First version number to compare"),
+    v2: int = Query(..., ge=1, description="Second version number to compare"),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Compare two versions of a workflow.
+    Returns both version snapshots with detailed differences in nodes and edges.
+    """
+    result = await db.execute(
+        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # TODO: Check permissions
+
+    version_history = workflow.version_history or []
+
+    # Find both version snapshots
+    v1_snapshot = None
+    v2_snapshot = None
+
+    for entry in version_history:
+        if entry.get("version") == v1:
+            v1_snapshot = entry
+        if entry.get("version") == v2:
+            v2_snapshot = entry
+
+    if not v1_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {v1} not found in workflow history"
+        )
+
+    if not v2_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {v2} not found in workflow history"
+        )
+
+    # Extract nodes and edges from both versions
+    v1_graph = v1_snapshot.get("graph_json", {})
+    v2_graph = v2_snapshot.get("graph_json", {})
+
+    v1_nodes = {node["id"]: node for node in v1_graph.get("nodes", [])}
+    v2_nodes = {node["id"]: node for node in v2_graph.get("nodes", [])}
+
+    v1_edges = {edge["id"]: edge for edge in v1_graph.get("edges", [])}
+    v2_edges = {edge["id"]: edge for edge in v2_graph.get("edges", [])}
+
+    # Compare nodes
+    nodes_added = []
+    nodes_removed = []
+    nodes_modified = []
+
+    # Find added and modified nodes
+    for node_id, node_data in v2_nodes.items():
+        if node_id not in v1_nodes:
+            nodes_added.append(NodeDiff(
+                node_id=node_id,
+                change_type="added",
+                new_data=node_data
+            ))
+        elif node_data != v1_nodes[node_id]:
+            nodes_modified.append(NodeDiff(
+                node_id=node_id,
+                change_type="modified",
+                old_data=v1_nodes[node_id],
+                new_data=node_data
+            ))
+
+    # Find removed nodes
+    for node_id, node_data in v1_nodes.items():
+        if node_id not in v2_nodes:
+            nodes_removed.append(NodeDiff(
+                node_id=node_id,
+                change_type="removed",
+                old_data=node_data
+            ))
+
+    # Compare edges
+    edges_added = []
+    edges_removed = []
+    edges_modified = []
+
+    # Find added and modified edges
+    for edge_id, edge_data in v2_edges.items():
+        if edge_id not in v1_edges:
+            edges_added.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="added",
+                new_data=edge_data
+            ))
+        elif edge_data != v1_edges[edge_id]:
+            edges_modified.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="modified",
+                old_data=v1_edges[edge_id],
+                new_data=edge_data
+            ))
+
+    # Find removed edges
+    for edge_id, edge_data in v1_edges.items():
+        if edge_id not in v2_edges:
+            edges_removed.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="removed",
+                old_data=edge_data
+            ))
+
+    return VersionComparison(
+        workflow_id=str(workflow_id),
+        version1=VersionSnapshot(**v1_snapshot),
+        version2=VersionSnapshot(**v2_snapshot),
+        nodes_added=nodes_added,
+        nodes_removed=nodes_removed,
+        nodes_modified=nodes_modified,
+        edges_added=edges_added,
+        edges_removed=edges_removed,
+        edges_modified=edges_modified,
+    )

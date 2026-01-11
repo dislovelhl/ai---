@@ -378,6 +378,7 @@ export interface WorkflowUpdate {
   temperature?: number;
   is_public?: boolean;
   is_template?: boolean;
+  version_notes?: string;
 }
 
 export interface ExecutionCreate {

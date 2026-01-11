@@ -15,6 +15,9 @@ import {
   WorkflowUpdate,
   ChatResponse,
   ChatMessage,
+  VersionHistoryEntry,
+  VersionComparison,
+  WorkflowRevert,
 } from "./types";
 
 // =============================================================================
@@ -415,6 +418,67 @@ export async function unstarWorkflow(id: string): Promise<void> {
   await fetchAuthAPI<void>(AGENT_API, `/workflows/${id}/star`, {
     method: "DELETE",
   });
+}
+
+// =============================================================================
+// WORKFLOW VERSION HISTORY API (Agent Service)
+// =============================================================================
+
+/**
+ * Get version history for a workflow
+ */
+export async function getWorkflowVersions(
+  workflowId: string
+): Promise<{
+  workflow_id: string;
+  current_version: number;
+  history: VersionHistoryEntry[];
+}> {
+  return fetchAuthAPI<{
+    workflow_id: string;
+    current_version: number;
+    history: VersionHistoryEntry[];
+  }>(AGENT_API, `/workflows/${workflowId}/versions`);
+}
+
+/**
+ * Compare two versions of a workflow
+ */
+export async function compareWorkflowVersions(
+  workflowId: string,
+  v1: number,
+  v2: number
+): Promise<VersionComparison> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("v1", v1.toString());
+  searchParams.set("v2", v2.toString());
+
+  return fetchAuthAPI<VersionComparison>(
+    AGENT_API,
+    `/workflows/${workflowId}/versions/compare?${searchParams.toString()}`
+  );
+}
+
+/**
+ * Revert a workflow to a previous version
+ * Creates a new version entry documenting the revert operation
+ */
+export async function revertWorkflowVersion(
+  workflowId: string,
+  targetVersion: number
+): Promise<AgentWorkflow> {
+  const revertData: WorkflowRevert = {
+    target_version: targetVersion,
+  };
+
+  return fetchAuthAPI<AgentWorkflow>(
+    AGENT_API,
+    `/workflows/${workflowId}/revert`,
+    {
+      method: "POST",
+      body: JSON.stringify(revertData),
+    }
+  );
 }
 
 // =============================================================================
