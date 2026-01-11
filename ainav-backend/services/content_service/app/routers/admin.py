@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import UUID4
 from typing import List
@@ -9,6 +9,7 @@ from ..schemas import (
     CategoryRead, CategoryCreate, CategoryUpdate,
     ScenarioRead, ScenarioCreate, ScenarioUpdate
 )
+from ..logging import log_admin_action
 from shared.models import User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -16,8 +17,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ==================== Tool Admin Endpoints ====================
 
 @router.post("/tools", response_model=ToolRead)
+@log_admin_action("create", "tool")
 async def create_tool_admin(
     tool_in: ToolCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -41,9 +44,11 @@ async def create_tool_admin(
 
 
 @router.put("/tools/{tool_id}", response_model=ToolRead)
+@log_admin_action("update", "tool")
 async def update_tool_admin(
     tool_id: UUID4,
     tool_in: ToolUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -77,8 +82,10 @@ async def update_tool_admin(
 
 
 @router.delete("/tools/{tool_id}")
+@log_admin_action("delete", "tool")
 async def delete_tool_admin(
     tool_id: UUID4,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -102,8 +109,10 @@ async def delete_tool_admin(
 # ==================== Category Admin Endpoints ====================
 
 @router.post("/categories", response_model=CategoryRead)
+@log_admin_action("create", "category")
 async def create_category_admin(
     category_in: CategoryCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -125,9 +134,11 @@ async def create_category_admin(
 
 
 @router.put("/categories/{category_id}", response_model=CategoryRead)
+@log_admin_action("update", "category")
 async def update_category_admin(
     category_id: UUID4,
     category_in: CategoryUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -158,8 +169,10 @@ async def update_category_admin(
 
 
 @router.delete("/categories/{category_id}")
+@log_admin_action("delete", "category")
 async def delete_category_admin(
     category_id: UUID4,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -183,8 +196,10 @@ async def delete_category_admin(
 # ==================== Scenario Admin Endpoints ====================
 
 @router.post("/scenarios", response_model=ScenarioRead)
+@log_admin_action("create", "scenario")
 async def create_scenario_admin(
     scenario_in: ScenarioCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -206,9 +221,11 @@ async def create_scenario_admin(
 
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioRead)
+@log_admin_action("update", "scenario")
 async def update_scenario_admin(
     scenario_id: UUID4,
     scenario_in: ScenarioUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -239,8 +256,10 @@ async def update_scenario_admin(
 
 
 @router.delete("/scenarios/{scenario_id}")
+@log_admin_action("delete", "scenario")
 async def delete_scenario_admin(
     scenario_id: UUID4,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
