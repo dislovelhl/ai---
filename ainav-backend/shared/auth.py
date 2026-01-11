@@ -226,6 +226,43 @@ async def get_current_user(
     return user
 
 
+async def get_current_active_user(
+    current_user = Depends(get_current_user)
+):
+    """
+    Dependency to get the current authenticated and active user.
+
+    Wraps get_current_user and adds an additional check to ensure the user
+    account is active (is_active=True). Use this for endpoints that should
+    only be accessible to active users.
+
+    Args:
+        current_user: User object from get_current_user dependency
+
+    Returns:
+        User object from database (guaranteed to be active)
+
+    Raises:
+        HTTPException: If user account is inactive (403 Forbidden)
+
+    Example:
+        @app.post("/workflows")
+        async def create_workflow(
+            workflow: WorkflowCreate,
+            user: User = Depends(get_current_active_user)
+        ):
+            # user is guaranteed to be authenticated AND active
+            return await create_workflow_for_user(workflow, user)
+    """
+    if not current_user.is_active:
+        logger.warning(f"Inactive user attempted access: {current_user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account"
+        )
+    return current_user
+
+
 async def get_optional_user(
     db: AsyncSession = Depends(get_db),
     token: Optional[str] = Depends(oauth2_scheme_optional)
