@@ -1,7 +1,7 @@
 """
 Workflows Router - CRUD operations for agent workflows.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -10,9 +10,12 @@ from uuid import UUID, uuid4
 import math
 import re
 
-from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from ..dependencies import get_current_user_id, get_optional_user, get_db
+from ..schemas import (
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse,
+    WorkflowSummary, PaginatedWorkflowsResponse
+)
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
 
 router = APIRouter()
@@ -48,26 +51,28 @@ def generate_slug(name: str) -> str:
 async def list_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    user_id: Optional[UUID] = None,  # TODO: Get from auth
     is_public: Optional[bool] = None,
     is_template: Optional[bool] = None,
     search: Optional[str] = None,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     List agent workflows with optional filtering.
+    Shows public workflows, plus authenticated user's private workflows.
     """
     query = select(AgentWorkflow)
     count_query = select(func.count(AgentWorkflow.id))
-    
-    # For now, if no user_id provided, show public workflows only
-    if user_id:
+
+    # If user is authenticated, show their workflows + public ones
+    # If not authenticated, show only public workflows
+    if current_user:
         query = query.where(
-            (AgentWorkflow.user_id == user_id) |
+            (AgentWorkflow.user_id == current_user.id) |
             (AgentWorkflow.is_public == True)
         )
         count_query = count_query.where(
-            (AgentWorkflow.user_id == user_id) |
+            (AgentWorkflow.user_id == current_user.id) |
             (AgentWorkflow.is_public == True)
         )
     else:
@@ -122,26 +127,28 @@ async def list_workflows(
 async def list_my_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
-    db: AsyncSession = Depends(get_async_session),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    List current user's workflows.
+    List current user's workflows (requires authentication).
     """
-    # TODO: Get user_id from auth token
-    # For now, return empty or all for testing
-    query = select(AgentWorkflow).order_by(AgentWorkflow.updated_at.desc())
-    count_query = select(func.count(AgentWorkflow.id))
-    
+    query = select(AgentWorkflow).where(
+        AgentWorkflow.user_id == user_id
+    ).order_by(AgentWorkflow.updated_at.desc())
+    count_query = select(func.count(AgentWorkflow.id)).where(
+        AgentWorkflow.user_id == user_id
+    )
+
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
-    
+
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
-    
+
     result = await db.execute(query)
     workflows = result.scalars().all()
-    
+
     return PaginatedWorkflowsResponse(
         items=[WorkflowSummary.model_validate(w) for w in workflows],
         total=total,
@@ -157,7 +164,7 @@ async def list_public_workflows(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     is_template: Optional[bool] = None,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     List public/community workflows.
@@ -206,60 +213,64 @@ async def list_public_workflows(
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     Get a specific workflow by ID.
+    Public workflows accessible to all, private workflows only to owner.
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check permissions (owner or public)
-    
+
+    # Check permissions: must be public or owned by current user
+    if not workflow.is_public:
+        if not current_user or workflow.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
     return WorkflowResponse.model_validate(workflow)
 
 
 @router.get("/by-slug/{slug}", response_model=WorkflowResponse)
 async def get_workflow_by_slug(
     slug: str,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     Get a specific workflow by slug.
+    Public workflows accessible to all, private workflows only to owner.
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == slug)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
+    # Check permissions: must be public or owned by current user
+    if not workflow.is_public:
+        if not current_user or workflow.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
     return WorkflowResponse.model_validate(workflow)
 
 
 @router.post("", response_model=WorkflowResponse, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
-    db: AsyncSession = Depends(get_async_session),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Create a new agent workflow.
+    Create a new agent workflow (requires authentication).
     """
-    # TODO: Get user_id from auth
-    # For now, use a placeholder or first user
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available. Please create a user first.")
-    
     # Check slug uniqueness
     existing = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == workflow_data.slug)
@@ -267,17 +278,17 @@ async def create_workflow(
     if existing.scalar_one_or_none():
         # Append unique suffix
         workflow_data.slug = f"{workflow_data.slug}-{str(uuid4())[:8]}"
-    
+
     # Convert graph_json from Pydantic model to dict
     data = workflow_data.model_dump()
     data['graph_json'] = workflow_data.graph_json.model_dump()
-    data['user_id'] = user.id
-    
+    data['user_id'] = user_id
+
     workflow = AgentWorkflow(**data)
     db.add(workflow)
     await db.commit()
     await db.refresh(workflow)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -285,23 +296,26 @@ async def create_workflow(
 async def update_workflow(
     workflow_id: UUID,
     workflow_data: WorkflowUpdate,
-    db: AsyncSession = Depends(get_async_session),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Update an existing workflow.
+    Update an existing workflow (requires authentication).
     Increments version and records history when graph changes.
     """
     from datetime import datetime
-    
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
+
+    # Check ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this workflow")
     
     update_data = workflow_data.model_dump(exclude_unset=True)
     
@@ -332,21 +346,24 @@ async def update_workflow(
 @router.delete("/{workflow_id}", status_code=204)
 async def delete_workflow(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Delete a workflow.
+    Delete a workflow (requires authentication and ownership).
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
-    
+
+    # Check ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this workflow")
+
     await db.delete(workflow)
     await db.commit()
 
@@ -354,34 +371,27 @@ async def delete_workflow(
 @router.post("/{workflow_id}/fork", response_model=WorkflowResponse, status_code=201)
 async def fork_workflow(
     workflow_id: UUID,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
-    db: AsyncSession = Depends(get_async_session),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Fork (clone) a public workflow to user's collection.
+    Fork (clone) a public workflow to user's collection (requires authentication).
     """
     # Get original workflow
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     original = result.scalar_one_or_none()
-    
+
     if not original:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     if not original.is_public:
         raise HTTPException(status_code=403, detail="Cannot fork private workflow")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
+
     # Create fork
     forked = AgentWorkflow(
-        user_id=user.id,
+        user_id=user_id,
         name=f"{original.name} (Fork)",
         name_zh=f"{original.name_zh} (Fork)" if original.name_zh else None,
         slug=f"{original.slug}-fork-{str(uuid4())[:8]}",
@@ -413,7 +423,7 @@ async def fork_workflow(
 @router.post("/{workflow_id}/star", status_code=200)
 async def star_workflow(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Star/upvote a workflow.
@@ -422,21 +432,21 @@ async def star_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Track user stars to prevent duplicate starring
     workflow.star_count += 1
     await db.commit()
-    
+
     return {"star_count": workflow.star_count}
 
 
 @router.get("/{workflow_id}/versions")
 async def get_workflow_versions(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get version history for a workflow.
@@ -445,10 +455,10 @@ async def get_workflow_versions(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     return {
         "workflow_id": str(workflow.id),
         "current_version": workflow.version or 1,
