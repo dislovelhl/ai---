@@ -8,6 +8,10 @@ import { useFlowStore } from "@/stores/flowStore";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "../code-block";
 import { NodeStatusIndicator, type NodeStatus } from "../node-status-indicator";
+import {
+  InlineSelect,
+  type InlineSelectOption,
+} from "../inline-editors";
 
 interface OutputNodeData {
   label?: string;
@@ -18,6 +22,14 @@ interface OutputNodeData {
   isPreview?: boolean;
   codeLanguage?: string;
 }
+
+// Output format options
+const OUTPUT_FORMAT_OPTIONS: InlineSelectOption[] = [
+  { value: "text", label: "Text" },
+  { value: "json", label: "JSON" },
+  { value: "markdown", label: "Markdown" },
+  { value: "code", label: "Code" },
+];
 
 /**
  * OutputNode - Endpoint of a workflow.
@@ -32,9 +44,16 @@ export const OutputNode = memo(function OutputNode({
   const isPreview = nodeData.isPreview;
 
   const liveUsers = useFlowStore((state) => state.liveUsers);
+  const updateNodeData = useFlowStore((state) => state.updateNodeData);
   const collaborators = Object.values(liveUsers).filter(
     (u) => u.activeNodeId === id
   );
+
+  // Disable editing when node is processing
+  const isProcessing =
+    nodeData.status === "pending" ||
+    nodeData.status === "running" ||
+    nodeData.status === "completed";
 
   const [isJustConverted, setIsJustConverted] = React.useState(false);
   const prevIsPreview = React.useRef(isPreview);
@@ -106,9 +125,20 @@ export const OutputNode = memo(function OutputNode({
             size="sm"
             className="[&_svg]:text-white/80 [&_div]:bg-white/20"
           />
-          <div className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-mono uppercase">
-            {nodeData.format || "Auto"}
-          </div>
+          <InlineSelect
+            value={nodeData.format || "text"}
+            onChange={(value) =>
+              updateNodeData(id, {
+                format: value as "text" | "json" | "markdown" | "code",
+              })
+            }
+            options={OUTPUT_FORMAT_OPTIONS}
+            placeholder="Select format..."
+            className="min-w-[80px]"
+            selectClassName="text-[10px] h-6"
+            displayClassName="text-[10px] bg-white/20 hover:bg-white/30 px-1.5 py-0.5 min-h-[22px] font-mono uppercase border-white/20"
+            disabled={isProcessing}
+          />
         </div>
       </div>
 
