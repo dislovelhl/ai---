@@ -108,7 +108,7 @@ class ToolRepository(BaseRepository[Tool]):
         tool = await self.get_by_id_with_relations(tool_id)
         if not tool:
             return
-            
+
         if scenario_ids is not None:
             # Fetch scenarios
             scen_query = select(Scenario).where(Scenario.id.in_(scenario_ids))
@@ -117,3 +117,60 @@ class ToolRepository(BaseRepository[Tool]):
             tool.scenarios = list(result.scalars().all())
             await self.session.commit()
             await self.session.refresh(tool)
+
+    async def get_alternatives(
+        self,
+        tool_id: any,
+        limit: int = 5,
+        prioritize_china: bool = True
+    ) -> List[Tool]:
+        """
+        Find alternative tools based on similarity algorithm:
+        - Same category: 3 points
+        - Each shared scenario: 1 point
+        - China-accessible bonus: 2 points (if original requires VPN and prioritize_china=True)
+
+        Returns top N alternatives sorted by score (descending)
+        """
+        from sqlalchemy.orm import selectinload
+
+        # Get the original tool with relations
+        original_tool = await self.get_by_id_with_relations(tool_id)
+        if not original_tool:
+            return []
+
+        # Get all other tools (excluding the original)
+        query = select(self.model).options(
+            selectinload(self.model.category),
+            selectinload(self.model.scenarios)
+        ).where(self.model.id != tool_id)
+        result = await self.session.execute(query)
+        all_tools = list(result.scalars().all())
+
+        # Calculate scores for each alternative
+        scored_tools = []
+        original_scenario_ids = {s.id for s in original_tool.scenarios}
+
+        for tool in all_tools:
+            score = 0
+
+            # Same category: 3 points
+            if tool.category_id == original_tool.category_id:
+                score += 3
+
+            # Overlapping scenarios: 1 point each
+            tool_scenario_ids = {s.id for s in tool.scenarios}
+            shared_scenarios = original_scenario_ids.intersection(tool_scenario_ids)
+            score += len(shared_scenarios)
+
+            # China-accessible bonus: 2 points if original requires VPN
+            if prioritize_china and original_tool.requires_vpn and tool.is_china_accessible:
+                score += 2
+
+            scored_tools.append((tool, score))
+
+        # Sort by score (descending) and take top N
+        scored_tools.sort(key=lambda x: x[1], reverse=True)
+        alternatives = [tool for tool, score in scored_tools[:limit]]
+
+        return alternatives
