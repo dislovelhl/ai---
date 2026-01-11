@@ -14,7 +14,8 @@ from shared.database import get_async_session
 from shared.models import AgentExecution, AgentWorkflow, User
 from ..schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionSummary,
-    PaginatedExecutionsResponse, ReactFlowNode, ReactFlowEdge
+    ExecutionDetailsResponse, PaginatedExecutionsResponse,
+    ReactFlowNode, ReactFlowEdge
 )
 from ..core.executor import WorkflowExecutor
 
@@ -102,11 +103,37 @@ async def get_execution(
         select(AgentExecution).where(AgentExecution.id == execution_id)
     )
     execution = result.scalar_one_or_none()
-    
+
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-    
+
     return ExecutionResponse.model_validate(execution)
+
+
+@router.get("/{execution_id}/details", response_model=ExecutionDetailsResponse)
+async def get_execution_details(
+    execution_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Get detailed execution information with step-by-step execution data.
+
+    Returns comprehensive execution details including:
+    - Overall execution status and metadata
+    - Detailed step-by-step execution data for each node
+    - Input/output data for each step
+    - Error messages and token usage per step
+    - Timing information (started_at, completed_at) for each step
+    """
+    result = await db.execute(
+        select(AgentExecution).where(AgentExecution.id == execution_id)
+    )
+    execution = result.scalar_one_or_none()
+
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    return ExecutionDetailsResponse.model_validate(execution)
 
 
 @router.post("/run", response_model=ExecutionResponse, status_code=201)

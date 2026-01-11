@@ -220,6 +220,40 @@ class ExecutionSummary(BaseModel):
         from_attributes = True
 
 
+class ExecutionStepDetail(BaseModel):
+    """Detailed information for a single execution step."""
+    node_id: str
+    status: str  # 'pending', 'running', 'completed', 'failed'
+    input_data: Optional[Any] = None
+    output_data: Optional[Any] = None
+    error_message: Optional[str] = None
+    token_usage: Optional[dict[str, int]] = None  # {input: int, output: int, total: int}
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class ExecutionDetailsResponse(BaseModel):
+    """Detailed execution response including step-by-step execution data."""
+    id: UUID
+    workflow_id: UUID
+    user_id: UUID
+    status: str
+    input_data: Optional[dict[str, Any]]
+    output_data: Optional[dict[str, Any]]
+    error_message: Optional[str]
+    execution_steps: Optional[list[dict[str, Any]]]  # Detailed step data
+    token_usage: int
+    total_api_calls: int
+    duration_ms: Optional[int]
+    trigger_type: Optional[str]
+    trigger_metadata: Optional[dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # =============================================================================
 # PAGINATED RESPONSES
 # =============================================================================
