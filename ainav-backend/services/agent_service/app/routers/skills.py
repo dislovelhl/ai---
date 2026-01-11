@@ -18,7 +18,7 @@ from shared.models import Skill, Tool
 from ..schemas import (
     SkillCreate, SkillUpdate, SkillResponse,
     PaginatedSkillsResponse, SkillTestRequest, SkillTestResponse,
-    SkillDocumentationResponse
+    SkillDocumentationResponse, SkillCodeExamplesResponse
 )
 
 router = APIRouter()
@@ -144,6 +144,198 @@ async def get_skill_documentation(
         raise HTTPException(status_code=404, detail="Skill not found")
 
     return SkillDocumentationResponse.model_validate(skill)
+
+
+@router.get("/{skill_id}/examples", response_model=SkillCodeExamplesResponse)
+async def get_skill_code_examples(
+    skill_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Generate code examples for a skill in multiple programming languages.
+
+    This endpoint dynamically generates code examples based on the skill's:
+    - API endpoint
+    - HTTP method
+    - Authentication requirements
+    - Sample request data
+
+    Returns executable code snippets in:
+    - Python (using requests library)
+    - JavaScript (using fetch API)
+    """
+    result = await db.execute(select(Skill).where(Skill.id == skill_id))
+    skill = result.scalar_one_or_none()
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    if not skill.api_endpoint:
+        raise HTTPException(status_code=400, detail="Skill has no API endpoint configured")
+
+    # Generate Python example
+    python_code = _generate_python_example(skill)
+
+    # Generate JavaScript example
+    javascript_code = _generate_javascript_example(skill)
+
+    return SkillCodeExamplesResponse(
+        python=python_code,
+        javascript=javascript_code
+    )
+
+
+def _generate_python_example(skill: Skill) -> str:
+    """Generate Python code example using requests library."""
+    method = (skill.http_method or "GET").upper()
+    endpoint = skill.api_endpoint
+    auth_type = skill.auth_type or "none"
+    auth_config = skill.auth_config or {}
+    sample_request = skill.sample_request or {}
+
+    # Build code parts
+    lines = [
+        "import requests",
+        "import json",
+        "",
+        f"url = '{endpoint}'"
+    ]
+
+    # Add headers
+    headers = {}
+    if skill.headers_template:
+        headers.update(skill.headers_template)
+
+    # Add authentication
+    if auth_type == "bearer":
+        header_name = auth_config.get("header", "Authorization")
+        prefix = auth_config.get("prefix", "Bearer")
+        headers[header_name] = f"{prefix} YOUR_API_KEY"
+    elif auth_type == "api_key":
+        header_name = auth_config.get("header", "X-API-Key")
+        headers[header_name] = "YOUR_API_KEY"
+    elif auth_type == "oauth2":
+        header_name = auth_config.get("header", "Authorization")
+        prefix = auth_config.get("prefix", "Bearer")
+        headers[header_name] = f"{prefix} YOUR_ACCESS_TOKEN"
+
+    if headers:
+        lines.append(f"headers = {json.dumps(headers, indent=2)}")
+
+    # Add request data
+    if sample_request and method in ["POST", "PUT", "PATCH"]:
+        lines.append(f"data = {json.dumps(sample_request, indent=2)}")
+
+    # Add request call
+    lines.append("")
+    if method in ["POST", "PUT", "PATCH"]:
+        if headers and sample_request:
+            lines.append(f"response = requests.{method.lower()}(url, headers=headers, json=data)")
+        elif headers:
+            lines.append(f"response = requests.{method.lower()}(url, headers=headers)")
+        elif sample_request:
+            lines.append(f"response = requests.{method.lower()}(url, json=data)")
+        else:
+            lines.append(f"response = requests.{method.lower()}(url)")
+    else:  # GET, DELETE, etc.
+        if headers and sample_request:
+            lines.append(f"response = requests.{method.lower()}(url, headers=headers, params=data)")
+        elif headers:
+            lines.append(f"response = requests.{method.lower()}(url, headers=headers)")
+        elif sample_request:
+            lines.append(f"response = requests.{method.lower()}(url, params=data)")
+        else:
+            lines.append(f"response = requests.{method.lower()}(url)")
+
+    # Add response handling
+    lines.extend([
+        "",
+        "if response.status_code == 200:",
+        "    result = response.json()",
+        "    print(json.dumps(result, indent=2))",
+        "else:",
+        f"    print(f'Error: {{response.status_code}} - {{response.text}}')"
+    ])
+
+    return "\n".join(lines)
+
+
+def _generate_javascript_example(skill: Skill) -> str:
+    """Generate JavaScript code example using fetch API."""
+    method = (skill.http_method or "GET").upper()
+    endpoint = skill.api_endpoint
+    auth_type = skill.auth_type or "none"
+    auth_config = skill.auth_config or {}
+    sample_request = skill.sample_request or {}
+
+    # Build code parts
+    lines = [
+        f"const url = '{endpoint}';"
+    ]
+
+    # Add headers
+    headers = {
+        "Content-Type": "application/json"
+    }
+    if skill.headers_template:
+        headers.update(skill.headers_template)
+
+    # Add authentication
+    if auth_type == "bearer":
+        header_name = auth_config.get("header", "Authorization")
+        prefix = auth_config.get("prefix", "Bearer")
+        headers[header_name] = f"{prefix} YOUR_API_KEY"
+    elif auth_type == "api_key":
+        header_name = auth_config.get("header", "X-API-Key")
+        headers[header_name] = "YOUR_API_KEY"
+    elif auth_type == "oauth2":
+        header_name = auth_config.get("header", "Authorization")
+        prefix = auth_config.get("prefix", "Bearer")
+        headers[header_name] = f"{prefix} YOUR_ACCESS_TOKEN"
+
+    lines.append(f"const headers = {json.dumps(headers, indent=2)};")
+
+    # Add request data
+    if sample_request and method in ["POST", "PUT", "PATCH"]:
+        lines.append(f"const data = {json.dumps(sample_request, indent=2)};")
+
+    # Build fetch options
+    lines.append("")
+    lines.append("const options = {")
+    lines.append(f"  method: '{method}',")
+
+    if sample_request and method in ["POST", "PUT", "PATCH"]:
+        lines.append("  headers: headers,")
+        lines.append("  body: JSON.stringify(data)")
+    elif sample_request and method == "GET":
+        # For GET requests with params, append to URL
+        lines.append("  headers: headers")
+        lines.insert(1, f"const params = new URLSearchParams({json.dumps(sample_request)});")
+        lines[0] = f"const url = '{endpoint}' + '?' + params.toString();"
+    else:
+        lines.append("  headers: headers")
+
+    lines.append("};")
+
+    # Add fetch call
+    lines.extend([
+        "",
+        "fetch(url, options)",
+        "  .then(response => {",
+        "    if (!response.ok) {",
+        "      throw new Error(`HTTP error! status: ${response.status}`);",
+        "    }",
+        "    return response.json();",
+        "  })",
+        "  .then(data => {",
+        "    console.log(JSON.stringify(data, null, 2));",
+        "  })",
+        "  .catch(error => {",
+        "    console.error('Error:', error);",
+        "  });"
+    ])
+
+    return "\n".join(lines)
 
 
 @router.post("", response_model=SkillResponse, status_code=201)

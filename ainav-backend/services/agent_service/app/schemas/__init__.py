@@ -306,3 +306,21 @@ class SkillDocumentationResponse(SkillResponse):
 
     class Config:
         from_attributes = True
+
+
+# =============================================================================
+# SKILL CODE EXAMPLES SCHEMA
+# =============================================================================
+
+class SkillCodeExamplesResponse(BaseModel):
+    """Response schema for skill code examples in multiple languages."""
+    python: str = Field(..., description="Python code example using requests library")
+    javascript: str = Field(..., description="JavaScript code example using fetch API")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "python": "import requests\n\nurl = 'https://api.example.com/v1/endpoint'\nheaders = {'Authorization': 'Bearer YOUR_API_KEY'}\ndata = {'param': 'value'}\n\nresponse = requests.post(url, headers=headers, json=data)\nprint(response.json())",
+                "javascript": "const url = 'https://api.example.com/v1/endpoint';\nconst headers = {'Authorization': 'Bearer YOUR_API_KEY'};\nconst data = {param: 'value'};\n\nfetch(url, {\n  method: 'POST',\n  headers: headers,\n  body: JSON.stringify(data)\n})\n.then(response => response.json())\n.then(data => console.log(data));"
+            }
+        }
