@@ -1,0 +1,104 @@
+# Core Test Coverage Expansion - Build Progress
+
+## Task Overview
+Increase test coverage from minimal state (4-5 test files) to comprehensive coverage of critical paths including auth, workflow CRUD, and execution engine.
+
+## Current Status: PLANNING COMPLETE
+
+## Implementation Plan Summary
+
+### Phase 1: Setup & Discovery (3 subtasks)
+- Audit existing test coverage
+- Setup pytest infrastructure (pytest.ini, conftest.py)
+- Create test database setup with fixtures
+
+### Phase 2: User Service Tests (4 subtasks)
+- Auth endpoints unit tests (registration, login, token generation)
+- OAuth integration tests (GitHub, WeChat)
+- User CRUD tests (profile operations)
+- JWT middleware tests (validation, expiration, refresh)
+
+### Phase 3: Agent Service Tests (5 subtasks)
+- Workflow CRUD tests
+- Skill management tests
+- Execution engine unit tests
+- Execution API integration tests
+- Agent chat tests
+
+### Phase 4: Content & Search Service Tests (3 subtasks)
+- Enhance content service tests (edge cases, validation)
+- Search service integration tests (Meilisearch)
+- Automation service tests (Celery tasks, crawlers)
+
+### Phase 5: Shared Module Tests (3 subtasks)
+- Database model tests (SQLAlchemy)
+- pgvector memory tests (vector embeddings, similarity search)
+- Config and utilities tests
+
+### Phase 6: CI/CD Integration (4 subtasks)
+- GitHub Actions workflow setup
+- Coverage reporting (70% threshold)
+- Test performance optimization (<5min runtime)
+- Documentation and README
+
+## Acceptance Criteria Progress
+- [ ] Unit tests for all service layer functions
+- [ ] Integration tests for critical API endpoints
+- [ ] At least 70% code coverage for core modules
+- [ ] CI pipeline runs tests on every PR
+- [ ] Tests run in under 5 minutes
+
+## Next Steps
+1. Begin Phase 1: Setup & Discovery
+2. Audit current test coverage to establish baseline
+3. Setup pytest infrastructure with proper configuration
+
+---
+Last Updated: 2026-01-11
+
+## [2026-01-11 10:50] Subtask 1.3 - Create test database setup - COMPLETED
+
+### Summary
+Implemented comprehensive test database configuration with proper fixtures for async testing and transaction-based test isolation.
+
+✅ setup_test_db.py script:
+   - Creates ainav_test_db database if it doesn't exist
+   - Enables pgvector extension for vector embedding support
+   - Creates all database tables from SQLAlchemy models
+   - Provides clean test database initialization
+
+✅ Updated conftest.py with proper async fixtures:
+   - test_engine_sync (session-scoped): Creates async engine, initializes tables
+   - test_engine (function-scoped): Provides engine to async tests
+   - db_session (function-scoped): Provides isolated database session with automatic transaction rollback
+   - Removed custom event_loop fixture to use pytest-asyncio defaults
+   - Proper cleanup with table drops at session end
+
+✅ test_database_fixtures.py comprehensive test suite (12 tests):
+   1. test_using_test_database - Verifies test database URL configuration
+   2. test_test_environment_configured - Validates test environment setup
+   3. test_db_session_fixture - Confirms db_session fixture provides valid async session
+   4. test_db_session_can_query_models - Verifies database queries work
+   5. test_transaction_isolation_first_test - Creates test data
+   6. test_transaction_isolation_second_test - Verifies data doesn't persist (rollback works)
+   7. test_multiple_operations_in_same_test - Tests multiple CRUD operations
+   8. test_rollback_cleans_up_previous_test - Confirms isolation between tests
+   9. test_relationship_loading - Tests SQLAlchemy relationships
+   10. test_unique_constraint_violation - Tests error handling
+   11. test_session_rollback_on_error - Verifies manual rollback after errors
+   12. test_clean_slate_for_each_test - Confirms clean database state per test
+
+### Test Results
+All 12 tests passing, verifying proper test isolation and database fixture functionality.
+
+### Key Features
+- Transaction-based test isolation (no database recreation between tests)
+- Proper async/await support with pytest-asyncio
+- NullPool for test connections (no connection pooling issues)
+- Savepoint support for nested transactions
+- Automatic rollback after each test
+- Session-scoped table creation (tables created once, data rolled back per test)
+
+### Next Steps
+Phase 1 complete. Ready to begin Phase 2: User Service Tests
+

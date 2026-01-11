@@ -1,0 +1,261 @@
+{
+  "feature": "Core Test Coverage Expansion",
+  "description": "# Core Test Coverage Expansion\n\nIncrease test coverage from current minimal state (4-5 test files) to comprehensive coverage of critical paths including auth, workflow CRUD, and execution engine.\n\n## Rationale\nLow test coverage increases risk of regressions and slows development velocity. Required for production confidence. Addresses technical debt: 'Test infrastructure needs expansion'.\n\n## User Stories\n- As a developer, I want confidence that my changes don't break existing functionality\n- As a platform operator, I want reliable deployments\n\n## Acceptance Criteria\n- [ ] Unit tests for all service layer functions\n- [ ] Integration tests for critical API endpoints\n- [ ] At least 70% code coverage for core modules\n- [ ] CI pipeline runs tests on every PR\n- [ ] Tests run in under 5 minutes\n",
+  "created_at": "2026-01-11T04:00:09.291Z",
+  "updated_at": "2026-01-11T15:55:03.892Z",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "phases": [
+    {
+      "phase_id": "1",
+      "phase_name": "Setup & Discovery",
+      "description": "Assess current test infrastructure and identify gaps",
+      "subtasks": [
+        {
+          "subtask_id": "1.1",
+          "title": "Audit existing test coverage",
+          "description": "Run coverage report on existing tests, document current coverage percentages per service",
+          "status": "completed",
+          "estimated_time": "30min",
+          "notes": "Generated comprehensive coverage baseline: 0% current coverage, 3,077 statements across 5 services. Created COVERAGE_BASELINE.md and coverage_baseline.json with detailed analysis."
+        },
+        {
+          "subtask_id": "1.2",
+          "title": "Setup pytest infrastructure",
+          "description": "Create pytest.ini, conftest.py with shared fixtures, setup coverage reporting with pytest-cov",
+          "status": "completed",
+          "estimated_time": "45min",
+          "notes": "Verified pytest infrastructure is complete and working. All components in place: pytest.ini with comprehensive settings (16 markers, coverage config, asyncio support), conftest.py with extensive fixtures (db, HTTP clients, mocks, data factories), .coveragerc for coverage reporting, requirements.txt with all testing deps, TESTING.md documentation, and test_pytest_setup.py verification (5/5 tests passing). Created virtual environment and confirmed all tests run successfully."
+        },
+        {
+          "subtask_id": "1.3",
+          "title": "Create test database setup",
+          "description": "Setup test database configuration, create fixtures for db sessions, implement transaction rollback for test isolation",
+          "status": "completed",
+          "estimated_time": "1hr",
+          "notes": "Created comprehensive test database setup: setup_test_db.py script for database/table creation with pgvector extension, updated conftest.py with proper async fixtures (test_engine_sync, test_engine, db_session with transaction rollback), implemented test isolation through transaction-based rollback. Created test_database_fixtures.py with 12 passing tests verifying: database URL configuration, environment setup, session fixtures, transaction isolation between tests, relationship loading, error handling, and unique constraints. All tests pass, confirming proper test isolation and database fixture functionality."
+        }
+      ]
+    },
+    {
+      "phase_id": "2",
+      "phase_name": "User Service Tests",
+      "description": "Comprehensive testing of authentication and user management",
+      "subtasks": [
+        {
+          "subtask_id": "2.1",
+          "title": "Auth endpoints unit tests",
+          "description": "Test user registration, login, token generation, password reset logic in auth.py router",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.2",
+          "title": "OAuth integration tests",
+          "description": "Test GitHub and WeChat OAuth flows in oauth.py, mock external OAuth providers",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.3",
+          "title": "User CRUD tests",
+          "description": "Test user profile operations in users.py: GET, PUT, DELETE user endpoints",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.4",
+          "title": "JWT middleware tests",
+          "description": "Test JWT token validation, expiration, refresh token logic in dependencies.py",
+          "status": "pending",
+          "estimated_time": "1hr",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "3",
+      "phase_name": "Agent Service Tests",
+      "description": "Testing workflow management and execution engine",
+      "subtasks": [
+        {
+          "subtask_id": "3.1",
+          "title": "Workflow CRUD tests",
+          "description": "Test workflow creation, update, delete, list operations in workflows.py router",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.2",
+          "title": "Skill management tests",
+          "description": "Test skill CRUD operations, OpenAPI schema validation in skills.py",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.3",
+          "title": "Execution engine unit tests",
+          "description": "Test LangGraph execution logic, step-by-step execution tracking in engine/ modules",
+          "status": "pending",
+          "estimated_time": "3hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.4",
+          "title": "Execution API integration tests",
+          "description": "Test execution endpoints in executions.py: start, status, logs, cancel operations",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.5",
+          "title": "Agent chat tests",
+          "description": "Test agent chat interactions, message history, context management in chat.py",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "4",
+      "phase_name": "Content & Search Service Tests",
+      "description": "Expand existing content tests and add search service coverage",
+      "subtasks": [
+        {
+          "subtask_id": "4.1",
+          "title": "Enhance content service tests",
+          "description": "Add edge cases, validation tests, relationship tests to existing test_content_crud.py",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.2",
+          "title": "Search service integration tests",
+          "description": "Test Meilisearch indexing, search queries, filters, pagination in search_service",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.3",
+          "title": "Automation service tests",
+          "description": "Enhance existing automation tests, add Celery task tests for crawlers",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "5",
+      "phase_name": "Shared Module Tests",
+      "description": "Test shared database models and utilities",
+      "subtasks": [
+        {
+          "subtask_id": "5.1",
+          "title": "Database model tests",
+          "description": "Test SQLAlchemy models in shared/models.py: relationships, constraints, timestamps",
+          "status": "pending",
+          "estimated_time": "2hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "5.2",
+          "title": "pgvector memory tests",
+          "description": "Test AgentMemory model, vector embeddings, similarity search queries",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "5.3",
+          "title": "Config and utilities tests",
+          "description": "Test Pydantic settings validation in shared/config.py, database connection utilities",
+          "status": "pending",
+          "estimated_time": "1hr",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "6",
+      "phase_name": "CI/CD Integration",
+      "description": "Setup automated testing in CI pipeline",
+      "subtasks": [
+        {
+          "subtask_id": "6.1",
+          "title": "GitHub Actions workflow",
+          "description": "Create .github/workflows/tests.yml with pytest, coverage, and service startup",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "6.2",
+          "title": "Coverage reporting setup",
+          "description": "Configure coverage thresholds (70%), integrate codecov or similar coverage reporting",
+          "status": "pending",
+          "estimated_time": "1hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "6.3",
+          "title": "Optimize test performance",
+          "description": "Implement test parallelization, optimize fixtures, ensure tests run under 5 minutes",
+          "status": "pending",
+          "estimated_time": "1.5hr",
+          "notes": ""
+        },
+        {
+          "subtask_id": "6.4",
+          "title": "Documentation and README",
+          "description": "Create testing documentation: how to run tests, write new tests, coverage requirements",
+          "status": "pending",
+          "estimated_time": "45min",
+          "notes": ""
+        }
+      ]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "criterion": "Unit tests for all service layer functions",
+      "status": "pending",
+      "verification": "All routers and core modules have corresponding test files"
+    },
+    {
+      "criterion": "Integration tests for critical API endpoints",
+      "status": "pending",
+      "verification": "Auth, workflows, executions, search endpoints fully tested"
+    },
+    {
+      "criterion": "At least 70% code coverage for core modules",
+      "status": "pending",
+      "verification": "Coverage report shows ≥70% for services/*/app/ directories"
+    },
+    {
+      "criterion": "CI pipeline runs tests on every PR",
+      "status": "pending",
+      "verification": "GitHub Actions workflow exists and runs successfully"
+    },
+    {
+      "criterion": "Tests run in under 5 minutes",
+      "status": "pending",
+      "verification": "Full test suite completes in <5min locally and in CI"
+    }
+  ],
+  "qa_signoff": {
+    "status": "pending",
+    "issues": "",
+    "tests_passed": ""
+  },
+  "recoveryNote": "Task recovered from stuck state at 2026-01-11T15:42:42.606Z"
+}
