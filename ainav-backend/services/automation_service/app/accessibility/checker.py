@@ -5,7 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 import httpx
 import time
+import socket
+import asyncio
 from typing import Optional
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +117,130 @@ async def test_http_connectivity(
     return result
 
 
+async def test_dns_resolution(
+    url: str,
+    timeout: float = 5.0
+) -> dict:
+    """
+    Test DNS resolution to detect DNS-level blocking.
+
+    DNS poisoning or DNS-level blocking is a common censorship technique in China
+    where DNS queries return fake IPs (often pointing to block pages) or fail entirely.
+
+    Args:
+        url: The URL to test (will extract hostname for DNS lookup)
+        timeout: DNS resolution timeout in seconds (default: 5.0)
+
+    Returns:
+        dict: Test results with keys:
+            - success: bool - Whether DNS resolution succeeded
+            - hostname: str - The hostname that was resolved
+            - ip_addresses: list[str] or None - List of resolved IP addresses
+            - resolution_time: float - DNS resolution time in seconds
+            - error_type: str or None - Type of error if failed (timeout, nxdomain, etc.)
+            - error_message: str or None - Detailed error message
+    """
+    # Parse URL to extract hostname
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname or parsed.netloc or url
+
+        # Remove port if present in hostname
+        if ':' in hostname and not hostname.startswith('['):  # Not IPv6
+            hostname = hostname.split(':')[0]
+
+    except Exception as e:
+        logger.error(f"Failed to parse URL {url}: {e}")
+        return {
+            "success": False,
+            "hostname": url,
+            "ip_addresses": None,
+            "resolution_time": 0.0,
+            "error_type": "invalid_url",
+            "error_message": f"Invalid URL format: {str(e)}"
+        }
+
+    if not hostname:
+        return {
+            "success": False,
+            "hostname": url,
+            "ip_addresses": None,
+            "resolution_time": 0.0,
+            "error_type": "invalid_url",
+            "error_message": "Could not extract hostname from URL"
+        }
+
+    start_time = time.time()
+    result = {
+        "success": False,
+        "hostname": hostname,
+        "ip_addresses": None,
+        "resolution_time": 0.0,
+        "error_type": None,
+        "error_message": None,
+    }
+
+    try:
+        # Use asyncio.wait_for with timeout to prevent hanging
+        # socket.getaddrinfo is a blocking call, so we run it in a thread executor
+        dns_info = await asyncio.wait_for(
+            asyncio.to_thread(
+                socket.getaddrinfo,
+                hostname,
+                None,  # port (None means any)
+                socket.AF_UNSPEC,  # Address family (IPv4 or IPv6)
+                socket.SOCK_STREAM  # Socket type (TCP)
+            ),
+            timeout=timeout
+        )
+
+        resolution_time = time.time() - start_time
+        result["resolution_time"] = resolution_time
+
+        # Extract unique IP addresses from getaddrinfo results
+        # getaddrinfo returns: [(family, type, proto, canonname, sockaddr), ...]
+        # sockaddr is (ip, port) for IPv4 or (ip, port, flow, scope) for IPv6
+        ip_addresses = list(set([info[4][0] for info in dns_info]))
+
+        result["success"] = True
+        result["ip_addresses"] = ip_addresses
+        logger.debug(f"DNS resolution succeeded for {hostname}: {ip_addresses} in {resolution_time:.3f}s")
+
+    except asyncio.TimeoutError:
+        result["resolution_time"] = time.time() - start_time
+        result["error_type"] = "timeout"
+        result["error_message"] = f"DNS resolution timeout after {timeout}s"
+        logger.debug(f"DNS resolution timeout for {hostname}")
+
+    except socket.gaierror as e:
+        result["resolution_time"] = time.time() - start_time
+        # gaierror codes: EAI_NONAME (-2), EAI_AGAIN (-3), etc.
+        if e.errno == socket.EAI_NONAME or "Name or service not known" in str(e):
+            result["error_type"] = "nxdomain"
+            result["error_message"] = f"Domain does not exist: {hostname}"
+        elif e.errno == socket.EAI_AGAIN or "Temporary failure" in str(e):
+            result["error_type"] = "dns_server_error"
+            result["error_message"] = f"DNS server temporary failure: {str(e)}"
+        else:
+            result["error_type"] = "dns_error"
+            result["error_message"] = f"DNS resolution error: {str(e)}"
+        logger.debug(f"DNS resolution error for {hostname}: {e}")
+
+    except OSError as e:
+        result["resolution_time"] = time.time() - start_time
+        result["error_type"] = "network_error"
+        result["error_message"] = f"Network error during DNS resolution: {str(e)}"
+        logger.debug(f"Network error during DNS resolution for {hostname}: {e}")
+
+    except Exception as e:
+        result["resolution_time"] = time.time() - start_time
+        result["error_type"] = "unknown_error"
+        result["error_message"] = f"Unexpected error: {str(e)}"
+        logger.error(f"Unexpected error during DNS resolution for {hostname}: {e}")
+
+    return result
+
+
 async def check_tool_accessibility(tool: Tool, session: AsyncSession) -> dict:
     """
     Check if a tool is accessible from China.
@@ -131,8 +258,7 @@ async def check_tool_accessibility(tool: Tool, session: AsyncSession) -> dict:
     """
     logger.info(f"Checking accessibility for tool: {tool.name}")
 
-    # Placeholder implementation - will be completed in subtasks 2.2-2.5
-    # TODO: Implement DNS resolution check (subtask 2.3)
+    # Placeholder implementation - will be completed in subtasks 2.4-2.5
     # TODO: Implement accessibility scoring logic (subtask 2.4)
     # TODO: Add check result persistence (subtask 2.5)
 
