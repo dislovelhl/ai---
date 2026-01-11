@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 from pydantic import UUID4
@@ -66,23 +66,47 @@ async def get_tools_by_scenario(
     slug: str,
     skip: int = 0,
     limit: int = 100,
+    pricing_type: Optional[str] = None,
+    is_china_accessible: Optional[bool] = None,
+    requires_vpn: Optional[bool] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all tools associated with a scenario."""
+    """
+    Get all tools associated with a scenario with optional filters.
+
+    Filters:
+    - pricing_type: Filter by pricing model (free, freemium, paid)
+    - is_china_accessible: Filter by China accessibility (true/false)
+    - requires_vpn: Filter by VPN requirement (true/false)
+
+    Filters can be combined for more specific results.
+    """
     repo = ScenarioRepository(db)
     scenario = await repo.get_by_slug(slug)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    # Query tools through the junction table
+    # Base query - tools through the junction table
     query = (
         select(Tool)
         .join(tool_scenarios, Tool.id == tool_scenarios.c.tool_id)
         .where(tool_scenarios.c.scenario_id == scenario.id)
         .options(selectinload(Tool.category), selectinload(Tool.scenarios))
-        .offset(skip)
-        .limit(limit)
     )
+
+    # Apply filters conditionally
+    if pricing_type is not None:
+        query = query.where(Tool.pricing_type == pricing_type)
+
+    if is_china_accessible is not None:
+        query = query.where(Tool.is_china_accessible == is_china_accessible)
+
+    if requires_vpn is not None:
+        query = query.where(Tool.requires_vpn == requires_vpn)
+
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+
     result = await db.execute(query)
     return result.scalars().all()
 
