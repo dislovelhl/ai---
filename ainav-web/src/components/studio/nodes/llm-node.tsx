@@ -6,6 +6,22 @@ import { Brain, Sparkles } from "lucide-react";
 import { useFlowStore, type LLMNodeData } from "@/stores/flowStore";
 import { cn } from "@/lib/utils";
 import { NodeStatusIndicator, type NodeStatus } from "../node-status-indicator";
+import {
+  InlineSelect,
+  InlineInput,
+  InlineTextarea,
+  type InlineSelectOption,
+} from "../inline-editors";
+
+// Available LLM models
+const MODEL_OPTIONS: InlineSelectOption[] = [
+  { value: "deepseek-chat", label: "DeepSeek Chat" },
+  { value: "deepseek-coder", label: "DeepSeek Coder" },
+  { value: "gpt-4", label: "GPT-4" },
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+  { value: "claude-3-opus", label: "Claude 3 Opus" },
+  { value: "claude-3-sonnet", label: "Claude 3 Sonnet" },
+];
 
 /**
  * LLMNode - Calls DeepSeek LLM for text generation.
@@ -20,6 +36,7 @@ export const LLMNode = memo(function LLMNode({
   const isProcessing =
     nodeData.status === "thinking" || nodeData.status === "streaming";
   const liveUsers = useFlowStore((state) => state.liveUsers);
+  const updateNodeData = useFlowStore((state) => state.updateNodeData);
 
   // Find collaborators selecting this node
   const collaborators = Object.values(liveUsers).filter(
@@ -117,12 +134,60 @@ export const LLMNode = memo(function LLMNode({
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Model Info */}
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded">
-          <span className="font-medium underline decoration-violet-500/50">
-            {nodeData.model || "deepseek-chat"}
-          </span>
-          {nodeData.token_count && <span>{nodeData.token_count} tokens</span>}
+        {/* Model Selection & Temperature */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] text-muted-foreground font-medium">Model:</span>
+            <InlineSelect
+              value={nodeData.model || "deepseek-chat"}
+              onChange={(value) => updateNodeData(id, { model: value })}
+              options={MODEL_OPTIONS}
+              placeholder="Select model..."
+              className="flex-1"
+              selectClassName="text-[10px]"
+              displayClassName="text-[10px] bg-muted/50 hover:bg-muted"
+              disabled={isProcessing}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] text-muted-foreground font-medium">Temperature:</span>
+            <InlineInput
+              value={String(nodeData.temperature ?? 0.7)}
+              onChange={(value) => {
+                const temp = parseFloat(value);
+                if (!isNaN(temp) && temp >= 0 && temp <= 2) {
+                  updateNodeData(id, { temperature: temp });
+                }
+              }}
+              placeholder="0.0 - 2.0"
+              className="w-20"
+              inputClassName="text-[10px]"
+              displayClassName="text-[10px] bg-muted/50 hover:bg-muted text-center"
+              disabled={isProcessing}
+            />
+          </div>
+          {nodeData.token_count && (
+            <div className="text-[9px] text-muted-foreground text-right">
+              {nodeData.token_count} tokens
+            </div>
+          )}
+        </div>
+
+        {/* Prompt Editor */}
+        <div className="space-y-1">
+          <div className="text-[10px] text-muted-foreground font-medium">Prompt:</div>
+          <InlineTextarea
+            value={nodeData.prompt || ""}
+            onChange={(value) => updateNodeData(id, { prompt: value })}
+            placeholder="Enter system prompt... (Ctrl+Enter to save)"
+            className="w-full"
+            textareaClassName="text-xs"
+            displayClassName="text-xs bg-muted/50 hover:bg-muted min-h-[40px]"
+            emptyText="Click to add prompt..."
+            rows={2}
+            maxRows={6}
+            disabled={isProcessing}
+          />
         </div>
 
         {/* Streaming/Content Area */}
@@ -143,12 +208,6 @@ export const LLMNode = memo(function LLMNode({
             <span className="inline-block w-1.5 h-4 ml-1 bg-violet-500 animate-pulse align-middle" />
           )}
         </div>
-
-        {nodeData.prompt && (
-          <div className="text-[10px] text-muted-foreground italic line-clamp-1 border-t pt-2 mt-2">
-            &quot;{nodeData.prompt}&quot;
-          </div>
-        )}
       </div>
 
       {/* Text output handle with visual indicator */}
