@@ -1,7 +1,7 @@
 """
 Workflows Router - CRUD operations for agent workflows.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -12,9 +12,8 @@ import re
 
 from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
-from ..dependencies import get_current_user_id, get_optional_current_user_id
+from ..dependencies import get_current_user_id, get_optional_current_user_id, get_current_active_user
 from ..schemas import (
     WorkflowCreate, WorkflowUpdate, WorkflowResponse,
     WorkflowSummary, PaginatedWorkflowsResponse
@@ -393,10 +392,10 @@ async def fork_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     original = result.scalar_one_or_none()
-    
+
     if not original:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     if not original.is_public:
         raise HTTPException(status_code=403, detail="Cannot fork private workflow")
 

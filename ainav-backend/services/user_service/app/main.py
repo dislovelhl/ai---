@@ -16,10 +16,10 @@ if settings.ENVIRONMENT != "production":
 
 app = FastAPI(title="AI Navigator - User Service")
 
-# CORS middleware for OAuth redirects
+# CORS middleware for OAuth redirects and frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

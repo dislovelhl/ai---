@@ -12,12 +12,12 @@ import math
 
 from shared.database import get_async_session
 from shared.models import AgentExecution, AgentWorkflow, User
+from ..dependencies import get_current_active_user, get_current_user_id
 from ..schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionSummary,
     PaginatedExecutionsResponse, ReactFlowNode, ReactFlowEdge
 )
 from ..core.executor import WorkflowExecutor
-from ..dependencies import get_current_user_id
 
 # Try to import LangGraph engine (optional dependency)
 try:
@@ -192,7 +192,7 @@ async def execute_workflow_background(
     """
     Background task to execute workflow.
     """
-    from shared.database import async_session_factory
+    from shared.database import SessionLocal as async_session_factory
     
     start_time = datetime.now(timezone.utc)
     
@@ -480,4 +480,3 @@ async def list_engines():
         })
     
     return {"engines": engines}
-

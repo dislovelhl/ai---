@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import UUID4
 from typing import List
-from ..dependencies import get_db
+from ..dependencies import get_db, get_current_admin_user
 from ..repository import CategoryRepository
 from ..schemas import CategoryRead, CategoryCreate, CategoryUpdate
+from shared.models import User
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
@@ -22,7 +23,12 @@ async def get_category(slug: str, db: AsyncSession = Depends(get_db)):
     return category
 
 @router.post("/", response_model=CategoryRead)
-async def create_category(category_in: CategoryCreate, db: AsyncSession = Depends(get_db)):
+async def create_category(
+    category_in: CategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Create a new category. Requires admin privileges."""
     repo = CategoryRepository(db)
     existing = await repo.get_by_slug(category_in.slug)
     if existing:
@@ -30,7 +36,13 @@ async def create_category(category_in: CategoryCreate, db: AsyncSession = Depend
     return await repo.create(**category_in.model_dump())
 
 @router.put("/{category_id}", response_model=CategoryRead)
-async def update_category(category_id: UUID4, category_in: CategoryCreate, db: AsyncSession = Depends(get_db)):
+async def update_category(
+    category_id: UUID4,
+    category_in: CategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Update a category. Requires admin privileges."""
     repo = CategoryRepository(db)
     category = await repo.update(category_id, **category_in.model_dump())
     if not category:
@@ -38,7 +50,12 @@ async def update_category(category_id: UUID4, category_in: CategoryCreate, db: A
     return category
 
 @router.delete("/{category_id}")
-async def delete_category(category_id: UUID4, db: AsyncSession = Depends(get_db)):
+async def delete_category(
+    category_id: UUID4,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Delete a category. Requires admin privileges."""
     repo = CategoryRepository(db)
     success = await repo.delete(category_id)
     if not success:
