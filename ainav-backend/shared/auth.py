@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 # This will extract the token from the Authorization header
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="v1/auth/login")
 
+# Optional OAuth2 scheme that doesn't raise errors when token is missing
+# Used for public endpoints that want to provide personalized content when user is authenticated
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="v1/auth/login", auto_error=False)
+
 
 async def get_db() -> AsyncSession:
     """
@@ -218,5 +222,75 @@ async def get_current_user(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    return user
+
+
+async def get_optional_user(
+    db: AsyncSession = Depends(get_db),
+    token: Optional[str] = Depends(oauth2_scheme_optional)
+):
+    """
+    Dependency to optionally get the current authenticated user.
+
+    This is used for public endpoints that want to provide personalized
+    content when a user is authenticated, but still work for anonymous users.
+    Unlike get_current_user, this does NOT raise exceptions for missing
+    or invalid tokens.
+
+    Args:
+        db: Database session dependency
+        token: Optional JWT token from Authorization header
+
+    Returns:
+        User object if token is valid and user exists, None otherwise
+
+    Example:
+        @app.get("/tools")
+        async def list_tools(
+            user: Optional[User] = Depends(get_optional_user)
+        ):
+            # Show personalized content if user is authenticated
+            if user:
+                return await get_tools_with_favorites(user.id)
+            # Show public content for anonymous users
+            return await get_public_tools()
+    """
+    from sqlalchemy import select
+    from .models import User
+    from uuid import UUID
+
+    # If no token provided, return None (anonymous user)
+    if token is None:
+        return None
+
+    # Try to extract and validate user_id from token
+    try:
+        user_id_str = extract_user_id_from_token(token)
+    except HTTPException:
+        # Token is invalid or malformed, treat as anonymous
+        logger.debug("Invalid token in optional auth, treating as anonymous")
+        return None
+
+    # Try to convert to UUID
+    try:
+        user_id = UUID(user_id_str)
+    except (ValueError, AttributeError):
+        logger.debug(f"Invalid UUID format in optional auth: {user_id_str}")
+        return None
+
+    # Try to fetch user from database
+    try:
+        stmt = select(User).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+    except Exception as e:
+        logger.warning(f"Database error in optional auth: {e}")
+        return None
+
+    # Return user if found, None if not found
+    if user is None:
+        logger.debug(f"User not found in optional auth for id: {user_id}")
+        return None
 
     return user
