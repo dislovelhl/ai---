@@ -25,8 +25,8 @@ def upgrade() -> None:
     # Create skills table
     op.create_table(
         'skills',
-        sa.Column('id', sa.UUID(as_uuid=True), primary_key=True),
-        sa.Column('tool_id', sa.UUID(as_uuid=True), sa.ForeignKey('tools.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('tool_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('tools.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(100), nullable=False),
         sa.Column('name_zh', sa.String(100), nullable=True),
         sa.Column('slug', sa.String(100), nullable=False, index=True),
@@ -49,8 +49,8 @@ def upgrade() -> None:
     # Create agent_workflows table
     op.create_table(
         'agent_workflows',
-        sa.Column('id', sa.UUID(as_uuid=True), primary_key=True),
-        sa.Column('user_id', sa.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('name_zh', sa.String(255), nullable=True),
         sa.Column('slug', sa.String(255), nullable=False, unique=True, index=True),
@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column('temperature', sa.Float(), nullable=True, server_default='0.7'),
         sa.Column('is_public', sa.Boolean(), nullable=True, server_default='false'),
         sa.Column('is_template', sa.Boolean(), nullable=True, server_default='false'),
-        sa.Column('forked_from_id', sa.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('forked_from_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='SET NULL'), nullable=True),
         sa.Column('fork_count', sa.Integer(), nullable=True, server_default='0'),
         sa.Column('run_count', sa.Integer(), nullable=True, server_default='0'),
         sa.Column('star_count', sa.Integer(), nullable=True, server_default='0'),
@@ -77,9 +77,9 @@ def upgrade() -> None:
     # Create agent_executions table
     op.create_table(
         'agent_executions',
-        sa.Column('id', sa.UUID(as_uuid=True), primary_key=True),
-        sa.Column('workflow_id', sa.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('user_id', sa.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('workflow_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('status', sa.String(20), nullable=True, server_default='pending'),
         sa.Column('input_data', postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column('output_data', postgresql.JSON(astext_type=sa.Text()), nullable=True),
@@ -97,8 +97,8 @@ def upgrade() -> None:
     # Create agent_memories table (for Phase 3 RAG)
     op.create_table(
         'agent_memories',
-        sa.Column('id', sa.UUID(as_uuid=True), primary_key=True),
-        sa.Column('workflow_id', sa.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('workflow_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('agent_workflows.id', ondelete='CASCADE'), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
         sa.Column('content_type', sa.String(50), nullable=True),
         sa.Column('meta_data', postgresql.JSON(astext_type=sa.Text()), nullable=True),

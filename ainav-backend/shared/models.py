@@ -1,9 +1,20 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, String, Text, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
+
+# Optional import for vector support
+try:
+    from pgvector.sqlalchemy import Vector
+    PGVECTOR_AVAILABLE = True
+except ImportError:
+    # If pgvector is not available, create a dummy Vector type
+    PGVECTOR_AVAILABLE = False
+    def Vector(dim):
+        """Dummy Vector type when pgvector is not installed"""
+        return Text  # Fallback to Text column
 
 Base = declarative_base()
 
@@ -255,7 +266,6 @@ class AgentMemory(Base, TimestampMixin):
     
     # Vector embedding for semantic search
     # Using 384 dimensions for MiniLM-L12-v2
-    from pgvector.sqlalchemy import Vector
     embedding = Column(Vector(384))
 
 
