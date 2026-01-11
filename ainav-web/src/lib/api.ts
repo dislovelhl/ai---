@@ -3,7 +3,10 @@ import {
   Scenario,
   Tool,
   ToolCreate,
-  ToolAlternativesResponse,
+  ToolRecommendation,
+  ToolCombination,
+  RelatedScenario,
+  ToolFilters,
   Skill,
   AgentWorkflow,
   AgentExecution,
@@ -12,9 +15,6 @@ import {
   WorkflowUpdate,
   ChatResponse,
   ChatMessage,
-  UsageStats,
-  FacetedSearchResponse,
-  SearchFilters,
 } from "./types";
 
 // =============================================================================
@@ -25,7 +25,8 @@ const CONTENT_API =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/v1";
 const SEARCH_API =
   process.env.NEXT_PUBLIC_SEARCH_API || "http://localhost:8002/v1";
-const USER_API = process.env.NEXT_PUBLIC_USER_API || "http://localhost:8003/v1";
+const USER_API =
+  process.env.NEXT_PUBLIC_USER_API || "http://localhost:8003/v1";
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:8005/v1";
 
@@ -125,8 +126,82 @@ export async function getScenarioBySlug(slug: string): Promise<Scenario> {
   return fetchAPI<Scenario>(CONTENT_API, `/scenarios/${slug}`);
 }
 
-export async function getToolsByScenario(slug: string): Promise<Tool[]> {
-  return fetchAPI<Tool[]>(CONTENT_API, `/scenarios/${slug}/tools`);
+/**
+ * Get tools for a scenario, optionally filtered by pricing and accessibility
+ */
+export async function getToolsByScenario(
+  slug: string,
+  filters?: ToolFilters
+): Promise<Tool[]> {
+  const searchParams = new URLSearchParams();
+  if (filters?.pricing_type)
+    searchParams.set("pricing_type", filters.pricing_type);
+  if (filters?.is_china_accessible !== undefined)
+    searchParams.set(
+      "is_china_accessible",
+      filters.is_china_accessible.toString()
+    );
+  if (filters?.requires_vpn !== undefined)
+    searchParams.set("requires_vpn", filters.requires_vpn.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<Tool[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/tools${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get recommended tools for a scenario based on user interactions and ratings
+ */
+export async function getScenarioRecommendations(
+  slug: string,
+  limit?: number
+): Promise<ToolRecommendation[]> {
+  const searchParams = new URLSearchParams();
+  if (limit) searchParams.set("limit", limit.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<ToolRecommendation[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/recommendations${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get commonly used tool combinations for a scenario
+ */
+export async function getToolCombinations(
+  slug: string,
+  minCoOccurrence?: number
+): Promise<ToolCombination[]> {
+  const searchParams = new URLSearchParams();
+  if (minCoOccurrence)
+    searchParams.set("min_co_occurrence", minCoOccurrence.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<ToolCombination[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/combinations${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get related scenarios based on shared tools (Jaccard similarity)
+ */
+export async function getRelatedScenarios(
+  slug: string,
+  minSimilarity?: number
+): Promise<RelatedScenario[]> {
+  const searchParams = new URLSearchParams();
+  if (minSimilarity)
+    searchParams.set("min_similarity", minSimilarity.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<RelatedScenario[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/related${query ? `?${query}` : ""}`
+  );
 }
 
 // =============================================================================
@@ -155,20 +230,6 @@ export async function getToolBySlug(slug: string): Promise<Tool> {
   return fetchAPI<Tool>(CONTENT_API, `/tools/${slug}`);
 }
 
-export async function getToolAlternatives(
-  slug: string,
-  limit?: number
-): Promise<ToolAlternativesResponse> {
-  const searchParams = new URLSearchParams();
-  if (limit) searchParams.set("limit", limit.toString());
-
-  const query = searchParams.toString();
-  return fetchAPI<ToolAlternativesResponse>(
-    CONTENT_API,
-    `/tools/${slug}/alternatives${query ? `?${query}` : ""}`
-  );
-}
-
 export async function createTool(tool: ToolCreate): Promise<Tool> {
   return fetchAPI<Tool>(CONTENT_API, "/tools", {
     method: "POST",
@@ -190,39 +251,6 @@ export async function searchTools(
   if (scenario) searchParams.set("scenario", scenario);
 
   return fetchAPI<Tool[]>(SEARCH_API, `/search?${searchParams.toString()}`);
-}
-
-/**
- * Faceted search for tools with filter support and facet counts
- * Supports filtering by China accessibility, pricing, API availability, and category
- */
-export async function facetedSearchTools(
-  filters?: SearchFilters
-): Promise<FacetedSearchResponse> {
-  const searchParams = new URLSearchParams();
-
-  if (filters?.q) searchParams.set("q", filters.q);
-  if (filters?.pricing_type)
-    searchParams.set("pricing_type", filters.pricing_type);
-  if (filters?.is_china_accessible !== undefined) {
-    searchParams.set(
-      "is_china_accessible",
-      filters.is_china_accessible.toString()
-    );
-  }
-  if (filters?.has_api !== undefined) {
-    searchParams.set("has_api", filters.has_api.toString());
-  }
-  if (filters?.category) searchParams.set("category", filters.category);
-  if (filters?.page) searchParams.set("page", filters.page.toString());
-  if (filters?.page_size)
-    searchParams.set("page_size", filters.page_size.toString());
-
-  const query = searchParams.toString();
-  return fetchAPI<FacetedSearchResponse>(
-    SEARCH_API,
-    `/search/faceted${query ? `?${query}` : ""}`
-  );
 }
 
 // =============================================================================
@@ -252,13 +280,6 @@ export async function register(userData: any): Promise<any> {
     method: "POST",
     body: JSON.stringify(userData),
   });
-}
-
-/**
- * Get current user's execution usage statistics
- */
-export async function getUserUsage(): Promise<UsageStats> {
-  return fetchAuthAPI<UsageStats>(USER_API, "/users/me/usage");
 }
 
 // =============================================================================
@@ -493,10 +514,14 @@ export async function chatWithAgent(
     body.session_id = sessionId;
   }
 
-  return fetchAuthAPI<ChatResponse>(AGENT_API, `/agents/${workflowId}/chat`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return fetchAuthAPI<ChatResponse>(
+    AGENT_API,
+    `/agents/${workflowId}/chat`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 /**

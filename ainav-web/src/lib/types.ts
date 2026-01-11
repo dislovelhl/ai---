@@ -16,9 +16,36 @@ export interface Scenario {
   id: string;
   name: string;
   slug: string;
+  description?: string;
+  description_zh?: string;
   icon?: string;
   created_at: string;
   updated_at: string;
+}
+
+// =============================================================================
+// SCENARIO RECOMMENDATION TYPES
+// =============================================================================
+
+export interface ToolRecommendation {
+  tool: Tool;
+  recommendation_score: number;
+}
+
+export interface ToolCombination {
+  tools: Tool[];
+  co_occurrence_count: number;
+}
+
+export interface RelatedScenario {
+  scenario: Scenario;
+  similarity_score: number;
+}
+
+export interface ToolFilters {
+  pricing_type?: "free" | "freemium" | "paid" | "beta_free" | "open_source";
+  is_china_accessible?: boolean;
+  requires_vpn?: boolean;
 }
 
 // =============================================================================

@@ -15,6 +15,8 @@ class TimestampSchema(BaseModel):
 class ScenarioBase(BaseModel):
     name: str = Field(..., max_length=100)
     slug: str = Field(..., max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
     model_config = ConfigDict(from_attributes=True)
@@ -25,6 +27,8 @@ class ScenarioCreate(ScenarioBase):
 class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
     slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=255)
 
 class ScenarioRead(ScenarioBase, TimestampSchema):
@@ -103,19 +107,25 @@ class ToolRead(ToolBase, TimestampSchema):
 
     model_config = ConfigDict(from_attributes=True)
 
-class ToolAlternativesResponse(BaseModel):
-    """Response schema for tool alternatives endpoint."""
-    alternatives: List[ToolRead] = Field(
-        default_factory=list,
-        description="List of alternative tools with similar functionality"
-    )
-    total_count: int = Field(
-        0,
-        description="Total number of alternatives found"
-    )
-    prioritized_count: int = Field(
-        0,
-        description="Number of China-accessible alternatives (when original requires VPN)"
-    )
+# --- Recommendation Response Schemas ---
+
+class ToolRecommendationRead(BaseModel):
+    """Response schema for tool recommendations with scoring."""
+    tool: ToolRead
+    recommendation_score: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ToolCombinationRead(BaseModel):
+    """Response schema for tool combinations that work well together."""
+    tools: List[ToolRead]
+    co_occurrence_count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RelatedScenarioRead(BaseModel):
+    """Response schema for related scenarios with similarity metrics."""
+    scenario: ScenarioRead
+    similarity_score: float
 
     model_config = ConfigDict(from_attributes=True)
