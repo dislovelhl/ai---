@@ -246,19 +246,30 @@ async def get_workflow(
 @router.get("/by-slug/{slug}", response_model=WorkflowResponse)
 async def get_workflow_by_slug(
     slug: str,
+    user_id: Optional[UUID] = Depends(get_optional_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Get a specific workflow by slug.
+
+    Public workflows accessible without auth.
+    Private workflows require authentication and ownership.
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == slug)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
+    # Check permissions: public workflows accessible to all, private only to owner
+    if not workflow.is_public:
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Authentication required to access private workflow")
+        if workflow.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this workflow")
+
     return WorkflowResponse.model_validate(workflow)
 
 
