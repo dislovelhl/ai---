@@ -296,43 +296,52 @@ async def update_workflow(
 ):
     """
     Update an existing workflow.
-    Increments version and records history when graph changes.
+    Increments version and records complete graph snapshot in history when graph changes.
     """
     from datetime import datetime
-    
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Check ownership
-    
+
     update_data = workflow_data.model_dump(exclude_unset=True)
-    
+
     # Handle graph_json conversion if present and track versioning
     if 'graph_json' in update_data and update_data['graph_json']:
-        update_data['graph_json'] = workflow_data.graph_json.model_dump()
-        
-        # Increment version and record history
-        workflow.version = (workflow.version or 1) + 1
+        # Save the CURRENT graph state to version history BEFORE updating
+        current_version = workflow.version or 1
         history_entry = {
-            "version": workflow.version,
+            "version": current_version,
             "timestamp": datetime.utcnow().isoformat(),
-            "changes": "Graph updated"
+            "notes": workflow_data.version_notes or "Graph updated",
+            "graph_json": workflow.graph_json,  # Save the current (old) graph
+            "user_id": str(workflow.user_id)
         }
+
+        # Initialize version_history if needed
         if workflow.version_history is None:
             workflow.version_history = []
+
+        # Append the current version snapshot to history
         workflow.version_history = workflow.version_history + [history_entry]
-    
+
+        # Now increment version and apply the new graph
+        workflow.version = current_version + 1
+        update_data['graph_json'] = workflow_data.graph_json.model_dump()
+
+    # Apply all updates
     for field, value in update_data.items():
         setattr(workflow, field, value)
-    
+
     await db.commit()
     await db.refresh(workflow)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
