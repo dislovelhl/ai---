@@ -16,3 +16,9 @@ SessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False
 )
+
+
+async def get_async_session() -> AsyncSession:
+    """Dependency for getting async database sessions."""
+    async with SessionLocal() as session:
+        yield session

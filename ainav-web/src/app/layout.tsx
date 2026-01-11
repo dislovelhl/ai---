@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description: "汇集全球顶尖 AI 工具、教程与变现案例，助你开启 AI 时代。",
 };
 
-import { Providers } from "@/components/providers";
+import { Providers } from "@/components/providers/index";
 
 export default function RootLayout({
   children,

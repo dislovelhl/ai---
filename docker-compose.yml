@@ -44,10 +44,10 @@ services:
       timeout: 5s
       retries: 5
 
-  content-service:
+  content_service:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/content-service/Dockerfile
+      dockerfile: ./services/content_service/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
       REDIS_URL: redis://redis:6379/0
@@ -63,15 +63,21 @@ services:
     volumes:
       - ./ainav-backend:/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  search-service:
+  search_service:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/search-service/Dockerfile
+      dockerfile: ./services/search_service/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
       MEILISEARCH_URL: http://meilisearch:7700
@@ -86,13 +92,29 @@ services:
     volumes:
       - ./ainav-backend:/app
 
-  user-service:
+  user_service:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/user-service/Dockerfile
+      dockerfile: ./services/user_service/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-super-secret-key-for-dev-only}
+      FRONTEND_URL: http://localhost:3000
+      # OAuth2 Settings
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: http://localhost:8003/v1/oauth/github/callback
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      WECHAT_REDIRECT_URI: http://localhost:8003/v1/oauth/wechat/callback
+      # Email Settings
+      SMTP_HOST: ${SMTP_HOST:-smtp.qq.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AI导航}
     ports:
       - "8003:8000"
     depends_on:
@@ -103,10 +125,10 @@ services:
     volumes:
       - ./ainav-backend:/app
 
-  automation-service:
+  automation_service:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/automation-service/Dockerfile
+      dockerfile: ./services/automation_service/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
       REDIS_URL: redis://redis:6379/0
@@ -122,11 +144,42 @@ services:
     volumes:
       - ./ainav-backend:/app
 
-  celery-worker:
+  agent_service:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/automation-service/Dockerfile
-    command: celery -A services.automation-service.app.celery_app worker --loglevel=info
+      dockerfile: ./services/agent_service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
+      REDIS_URL: redis://redis:6379/0
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./ainav-backend:/app
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery_worker:
+    build:
+      context: ./ainav-backend
+      dockerfile: ./services/automation_service/Dockerfile
+    command: celery -A services.automation_service.app.celery_app worker --loglevel=info
     environment:
       DATABASE_URL: postgresql+asyncpg://ainav:ainavpassword@db/ainav_db
       REDIS_URL: redis://redis:6379/0
@@ -140,11 +193,11 @@ services:
     volumes:
       - ./ainav-backend:/app
 
-  celery-beat:
+  celery_beat:
     build:
       context: ./ainav-backend
-      dockerfile: ./services/automation-service/Dockerfile
-    command: celery -A services.automation-service.app.celery_app beat --loglevel=info
+      dockerfile: ./services/automation_service/Dockerfile
+    command: celery -A services.automation_service.app.celery_app beat --loglevel=info
     environment:
       REDIS_URL: redis://redis:6379/0
       MEILISEARCH_URL: http://meilisearch:7700
@@ -164,8 +217,10 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8001/v1
       NEXT_PUBLIC_SEARCH_API: http://localhost:8002/v1
       NEXT_PUBLIC_USER_API: http://localhost:8003/v1
+      NEXT_PUBLIC_AGENT_API: http://localhost:8005/v1
     depends_on:
-      - content-service
+      - content_service
+      - agent_service
     volumes:
       - ./ainav-web:/app
       - /app/node_modules

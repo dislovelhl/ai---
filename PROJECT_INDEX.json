@@ -3,7 +3,9 @@
     "name": "AI Navigator Platform",
     "description": "中国AI生态导航与认知中枢平台",
     "generated_at": "2026-01-09T12:00:00Z",
-    "version": "1.0.0"
+    "version": "1.1.0",
+    "last_updated": "2026-01-09T12:00:00Z",
+    "update_notes": "Added agent-service microservice, updated frontend/backend dependencies"
   },
   "structure": {
     "directories": [
@@ -11,6 +13,7 @@
         "name": "ainav-backend",
         "description": "Python FastAPI microservices backend",
         "subdirectories": [
+          "services/agent-service",
           "services/automation-service",
           "services/content-service",
           "services/search-service",
@@ -36,6 +39,12 @@
   },
   "entry_points": {
     "backend": [
+      {
+        "service": "agent-service",
+        "path": "ainav-backend/services/agent-service/app/main.py",
+        "description": "Agent workflow builder and execution service",
+        "port": 8005
+      },
       {
         "service": "automation-service",
         "path": "ainav-backend/services/automation-service/app/main.py",
@@ -83,6 +92,22 @@
   },
   "core_modules": {
     "backend": [
+      {
+        "name": "agent-service",
+        "path": "ainav-backend/services/agent-service/",
+        "exports": ["Skills management", "Agent workflows", "Chat execution", "Memory services"],
+        "purpose": "Core agentic platform for building and executing AI agent workflows using LangGraph",
+        "key_files": [
+          "app/main.py",
+          "app/routers/skills.py",
+          "app/routers/workflows.py",
+          "app/routers/executions.py",
+          "app/routers/chat.py",
+          "app/core/agentic_executor.py",
+          "app/core/memory_service.py",
+          "app/engine/langgraph_engine.py"
+        ]
+      },
       {
         "name": "automation-service",
         "path": "ainav-backend/services/automation-service/",
@@ -283,8 +308,10 @@
       "framework": "Next.js 16.1.1 (App Router, React 19.2.3)",
       "styling": "Tailwind CSS 4.0, shadcn/ui components",
       "state": "TanStack Query 5.62.7, Zustand 5.0.2",
-      "ui": "Radix UI primitives, Lucide React icons",
+      "ui": "Radix UI primitives, Lucide React icons, Sonner notifications",
       "forms": "React Hook Form 7.54.1 with Zod validation",
+      "drag_drop": "@dnd-kit/core/sortable/utilities for tool management",
+      "flow_diagrams": "@xyflow/react for agent workflow visualization",
       "typescript": "Full type coverage with strict mode"
     },
     "backend": {
@@ -294,7 +321,8 @@
       "search": "Meilisearch 0.31.2 for full-text search",
       "auth": "JWT tokens with bcrypt password hashing",
       "http": "httpx 0.28.1 for external API calls",
-      "ml": "sentence-transformers 3.3.1 for content embeddings"
+      "ml": "sentence-transformers 3.3.1 for content embeddings",
+      "agent_orchestration": "LangChain/LangGraph for AI agent workflows"
     },
     "infrastructure": {
       "database": "PostgreSQL 16 with pgvector extension",
@@ -317,7 +345,8 @@
       "content_api": "http://localhost:8001/v1",
       "search_api": "http://localhost:8002/v1/search",
       "user_api": "http://localhost:8003/v1",
-      "automation_api": "http://localhost:8004"
+      "automation_api": "http://localhost:8004",
+      "agent_api": "http://localhost:8005/v1"
     },
     "development_workflow": [
       "Backend changes: Services auto-reload in Docker containers",
@@ -336,8 +365,8 @@
     "file_counts": {
       "python_files": 37,
       "typescript_files": 26,
-      "documentation_files": 7,
-      "config_files": 5,
+      "documentation_files": 8,
+      "config_files": 6,
       "docker_files": 5,
       "test_files": 5
     },

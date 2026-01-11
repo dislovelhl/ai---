@@ -8,6 +8,7 @@ Generated: 2026-01-09 12:00:00 UTC
 ai 导航/
 ├── ainav-backend/                 # Python FastAPI microservices backend
 │   ├── services/
+│   │   ├── agent-service/         # Agent workflow builder & execution
 │   │   ├── automation-service/    # Content automation & crawling
 │   │   ├── content-service/       # Tool & category management
 │   │   ├── search-service/        # Search infrastructure
@@ -27,10 +28,11 @@ ai 导航/
 ## 🚀 Entry Points
 
 ### Backend Services
-- **Automation Service**: `ainav-backend/services/automation-service/app/main.py` - Content crawling and automation pipelines
-- **Content Service**: `ainav-backend/services/content-service/app/main.py` - Tool CRUD and category management
-- **Search Service**: `ainav-backend/services/search-service/app/main.py` - Full-text and vector search APIs
-- **User Service**: `ainav-backend/services/user-service/app/main.py` - Authentication and user management
+- **Agent Service**: `ainav-backend/services/agent-service/app/main.py` - Agent workflow builder and execution service (port 8005)
+- **Automation Service**: `ainav-backend/services/automation-service/app/main.py` - Content crawling and automation pipelines (port 8004)
+- **Content Service**: `ainav-backend/services/content-service/app/main.py` - Tool CRUD and category management (port 8001)
+- **Search Service**: `ainav-backend/services/search-service/app/main.py` - Full-text and vector search APIs (port 8002)
+- **User Service**: `ainav-backend/services/user-service/app/main.py` - Authentication and user management (port 8003)
 
 ### Frontend
 - **Main App**: `ainav-web/src/app/page.tsx` - Homepage with tool discovery and search
@@ -42,6 +44,20 @@ ai 导航/
 ## 📦 Core Modules
 
 ### Backend Architecture
+#### Module: agent-service
+- **Path**: `ainav-backend/services/agent-service/`
+- **Exports**: Skills management, Agent workflows, Chat execution, Memory services
+- **Purpose**: Core agentic platform for building and executing AI agent workflows using LangGraph
+- **Key Files**:
+  - `app/main.py` - FastAPI service entry point with agent APIs
+  - `app/routers/skills.py` - Skills management endpoints
+  - `app/routers/workflows.py` - Agent workflow CRUD operations
+  - `app/routers/executions.py` - Workflow execution management
+  - `app/routers/chat.py` - Agent chat and conversation APIs
+  - `app/core/agentic_executor.py` - LangGraph-based agent execution engine
+  - `app/core/memory_service.py` - Agent memory and context management
+  - `app/engine/langgraph_engine.py` - LangGraph workflow orchestration
+
 #### Module: automation-service
 - **Path**: `ainav-backend/services/automation-service/`
 - **Exports**: Crawl tasks, enrichment pipelines, Celery workers
@@ -163,8 +179,10 @@ ai 导航/
 - **Framework**: Next.js 16.1.1 (App Router, React 19.2.3)
 - **Styling**: Tailwind CSS 4.0, shadcn/ui components
 - **State Management**: TanStack Query 5.62.7, Zustand 5.0.2
-- **UI Components**: Radix UI primitives, Lucide React icons
+- **UI Components**: Radix UI primitives, Lucide React icons, Sonner notifications
 - **Forms**: React Hook Form 7.54.1 with Zod validation
+- **Drag & Drop**: @dnd-kit/core/sortable/utilities for tool management
+- **Flow Diagrams**: @xyflow/react for agent workflow visualization
 - **TypeScript**: Full type coverage with strict mode
 
 ### Backend Stack
@@ -175,6 +193,7 @@ ai 导航/
 - **Authentication**: JWT tokens with bcrypt password hashing
 - **HTTP Client**: httpx 0.28.1 for external API calls
 - **ML/Embeddings**: sentence-transformers 3.3.1 for content embeddings
+- **Agent Orchestration**: LangChain/LangGraph for AI agent workflows
 
 ### Infrastructure Dependencies
 - **Database**: PostgreSQL 16 with pgvector extension
@@ -198,6 +217,7 @@ ai 导航/
 - **Search API**: http://localhost:8002/v1/search
 - **User API**: http://localhost:8003/v1
 - **Automation API**: http://localhost:8004
+- **Agent API**: http://localhost:8005/v1
 
 ### Development Workflow
 1. **Backend changes**: Services auto-reload in Docker containers
@@ -208,3 +228,11 @@ ai 导航/
 ---
 
 **Token Efficiency**: This index reduces repository reading from ~58K tokens to ~3K tokens (94% reduction) while maintaining comprehensive project overview.
+
+---
+
+**Index Update Notes (2026-01-09)**:
+- Added agent-service microservice (port 8005)
+- Updated frontend dependencies (added drag-and-drop, flow diagrams)
+- Added LangChain/LangGraph for agent orchestration
+- Updated file counts: 105 code files, 8 docs, 6 config, 5 tests

@@ -46,3 +46,21 @@ celerybeat-schedule
 **/data/pgdata/
 **/data/redis/
 **/data/meilisearch/
+
+# Auto Claude data directory
+.auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/
+
+# Additional ignores
+.serena/
+ainav-web/.next_dev/
+ainav-web/.npm/
+.config/
+studio.html

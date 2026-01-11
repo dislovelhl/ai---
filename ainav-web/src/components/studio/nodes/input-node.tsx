@@ -1,0 +1,122 @@
+"use client";
+
+import React, { memo } from "react";
+import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Terminal } from "lucide-react";
+import { useFlowStore } from "@/stores/flowStore";
+import { cn } from "@/lib/utils";
+import { NodeStatusIndicator, type NodeStatus } from "../node-status-indicator";
+
+interface InputNodeData {
+  label?: string;
+  inputType?: string;
+  default?: string;
+  isPreview?: boolean;
+  status?: "idle" | "ready" | "pending" | "completed";
+  value?: string;
+}
+
+/**
+ * InputNode - Starting point of a workflow.
+ * Receives user input or default values with status indicator.
+ */
+export const InputNode = memo(function InputNode({
+  data,
+  selected,
+  id,
+}: NodeProps) {
+  const nodeData = data as InputNodeData;
+  const liveUsers = useFlowStore((state) => state.liveUsers);
+  const collaborators = Object.values(liveUsers).filter(
+    (u) => u.activeNodeId === id
+  );
+
+  const [isJustConverted, setIsJustConverted] = React.useState(false);
+  const prevIsPreview = React.useRef(nodeData.isPreview);
+
+  React.useEffect(() => {
+    if (prevIsPreview.current && !nodeData.isPreview) {
+      setIsJustConverted(true);
+      const timer = setTimeout(() => setIsJustConverted(false), 600);
+      return () => clearTimeout(timer);
+    }
+    prevIsPreview.current = nodeData.isPreview;
+  }, [nodeData.isPreview]);
+
+  // Determine display status
+  const displayStatus: NodeStatus = (() => {
+    if (nodeData.status === "completed" || nodeData.value) return "completed";
+    if (nodeData.status === "pending") return "pending";
+    if (nodeData.status === "ready") return "idle";
+    return "idle";
+  })();
+
+  return (
+    <div
+      className={cn(
+        "relative min-w-[200px] rounded-xl border-2 bg-background shadow-lg transition-all duration-300",
+        selected
+          ? "border-primary ring-4 ring-primary/20 scale-[1.02]"
+          : "border-border",
+        nodeData.isPreview &&
+          "opacity-50 grayscale border-dashed border-primary/50",
+        collaborators.length > 0 && "ring-4 ring-offset-2",
+        isJustConverted && "animate-node-convert"
+      )}
+      style={
+        collaborators.length > 0
+          ? { borderStyle: "solid", borderColor: collaborators[0].color }
+          : {}
+      }
+    >
+      {/* Collaborator Indicators */}
+      {collaborators.length > 0 && (
+        <div className="absolute -top-6 right-0 flex -space-x-1">
+          {collaborators.map((u) => (
+            <div
+              key={u.id}
+              className="px-1.5 py-0.5 rounded text-[8px] font-bold text-white shadow-sm border border-white"
+              style={{ backgroundColor: u.color }}
+            >
+              {u.name}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="bg-emerald-600 px-4 py-2 text-white rounded-t-[10px] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4" />
+          <span className="font-bold text-xs uppercase tracking-wider">
+            {nodeData.label || "Input"}
+          </span>
+        </div>
+        <NodeStatusIndicator
+          status={displayStatus}
+          size="sm"
+          className="[&_svg]:text-white/80 [&_div]:bg-white/20"
+        />
+      </div>
+
+      <div className="p-4">
+        <div className="text-xs text-muted-foreground opacity-80">
+          {nodeData.inputType === "json"
+            ? "JSON Objects Preferred"
+            : "Direct Text Input"}
+        </div>
+        {nodeData.value && (
+          <div className="mt-2 text-xs bg-muted/50 p-2 rounded truncate max-w-[180px]">
+            {nodeData.value}
+          </div>
+        )}
+      </div>
+
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!w-3 !h-3 !bg-background !border-2 !border-emerald-600 !-right-1.5"
+      />
+    </div>
+  );
+});

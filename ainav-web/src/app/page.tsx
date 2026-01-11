@@ -15,6 +15,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getTools, getScenarios } from "@/lib/api";
 import { ToolCard } from "@/components/tools/tool-card";
+import { SearchHero } from "@/components/home/search-hero";
+import { ScenarioChips } from "@/components/home/scenario-chips";
 
 export default function Home() {
   const { data: tools, isLoading: toolsLoading } = useQuery({
@@ -32,65 +34,48 @@ export default function Home() {
       <Navbar />
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative pt-20 pb-32 overflow-hidden bg-grid">
-          <div className="absolute inset-0 bg-gradient-to-b from-background via-background/90 to-background pointer-events-none" />
+        <section className="relative pt-32 pb-24 overflow-hidden">
+          <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background pointer-events-none" />
 
-          <div className="container relative mx-auto px-4 text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="container relative mx-auto px-4 text-center z-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-8 animate-in fade-in zoom-in duration-500">
               <Sparkles className="h-3 w-3" />
-              <span>发现人工智能的无限可能</span>
+              <span>AI 时代的数字前哨</span>
             </div>
 
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
-              开启你的 <span className="text-gradient">AI 进化</span> 旅程
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+              探索 <span className="text-gradient">最好的免费 AI 工具</span>
             </h1>
 
-            <p className="max-w-2xl mx-auto text-lg text-muted-foreground mb-10 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-900">
-              AI 导航是一个专业的 AI 工具发现平台。我们为你精选全球最前沿的 AI
-              技术， 从创意生产到商业变现，助你全面拥抱 AI 时代。
+            <p className="max-w-xl mx-auto text-lg text-muted-foreground mb-12 animate-in fade-in slide-in-from-bottom-8 duration-900">
+              不仅仅是导航，更是你的认知升级中枢。
+              <br className="hidden sm:block" />
+              全网精选，场景赋能，助你驾驭 AI 浪潮。
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000">
-              <Link href="/tools">
-                <Button
-                  size="lg"
-                  className="h-14 px-8 rounded-full text-lg group"
-                >
-                  立即探索{" "}
-                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-              <Link href="/learn">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-14 px-8 rounded-full text-lg glass"
-                >
-                  查看教程
-                </Button>
-              </Link>
+            <div className="animate-in fade-in slide-in-from-bottom-10 duration-1000">
+              <SearchHero />
+              <ScenarioChips />
             </div>
 
-            {/* Stats / Trust Badges */}
-            <div className="mt-20 grid grid-cols-2 lg:grid-cols-4 gap-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-12 duration-1200">
-              <div className="glass p-6 rounded-2xl">
-                <div className="text-3xl font-bold text-primary mb-1">
-                  5,000+
+            {/* Stats / Trust Badges - Simplified */}
+            <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto opacity-70 hover:opacity-100 transition-opacity duration-500 animate-in fade-in slide-in-from-bottom-12 duration-1200 delay-300">
+              {[
+                { label: "精选工具", value: "5,000+" },
+                { label: "应用场景", value: "100+" },
+                { label: "内容更新", value: "24/7" },
+                { label: "活跃用户", value: "50k+" },
+              ].map((stat, i) => (
+                <div key={i} className="text-center p-4">
+                  <div className="text-2xl font-bold text-foreground mb-1">
+                    {stat.value}
+                  </div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                    {stat.label}
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">精选工具</div>
-              </div>
-              <div className="glass p-6 rounded-2xl">
-                <div className="text-3xl font-bold text-primary mb-1">100+</div>
-                <div className="text-sm text-muted-foreground">应用场景</div>
-              </div>
-              <div className="glass p-6 rounded-2xl">
-                <div className="text-3xl font-bold text-primary mb-1">24/7</div>
-                <div className="text-sm text-muted-foreground">内容更新</div>
-              </div>
-              <div className="glass p-6 rounded-2xl">
-                <div className="text-3xl font-bold text-primary mb-1">50k+</div>
-                <div className="text-sm text-muted-foreground">活跃用户</div>
-              </div>
+              ))}
             </div>
           </div>
         </section>
