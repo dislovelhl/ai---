@@ -242,20 +242,43 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class AccessibilityCheckLog(Base, TimestampMixin):
+    """
+    Logs all accessibility checks performed on tools.
+    Tracks historical data for tool accessibility from China.
+    """
+    __tablename__ = "accessibility_check_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tool_id = Column(UUID(as_uuid=True), ForeignKey("tools.id"), nullable=False)
+
+    # Check timing
+    check_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Check results
+    was_accessible = Column(Boolean, nullable=False)
+    requires_vpn = Column(Boolean, nullable=False)
+    response_time = Column(Float)  # Response time in milliseconds
+    error_message = Column(Text, nullable=True)
+
+    # Relationship
+    tool = relationship("Tool")
