@@ -312,3 +312,32 @@ class ModerationQueue(Base, TimestampMixin):
     # Relationships
     submitter = relationship("User", foreign_keys=[submitter_id])
     reviewer = relationship("User", foreign_keys=[reviewer_id])
+
+
+class AdminActivityLog(Base, TimestampMixin):
+    """
+    Audit trail for admin actions.
+    Tracks all create/update/delete operations and moderation actions.
+    """
+    __tablename__ = "admin_activity_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Admin who performed the action
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Action details
+    action_type = Column(String(50), nullable=False)  # 'create', 'update', 'delete', 'approve', 'reject'
+    resource_type = Column(String(50), nullable=False)  # 'tool', 'category', 'scenario', 'workflow', etc.
+    resource_id = Column(UUID(as_uuid=True), nullable=True)  # UUID of the affected resource
+
+    # Change tracking (JSON for flexibility)
+    old_value = Column(JSON, nullable=True)  # Previous state before the change
+    new_value = Column(JSON, nullable=True)  # New state after the change
+
+    # Additional context
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    user_agent = Column(String(255), nullable=True)
+
+    # Relationship
+    admin = relationship("User", foreign_keys=[admin_id])
