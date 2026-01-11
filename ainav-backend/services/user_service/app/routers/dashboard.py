@@ -239,8 +239,117 @@ async def get_dashboard_stats(
     )
 
 
+@router.get("/activity", response_model=ActivityFeedResponse)
+async def get_recent_activity(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get recent user activity feed with pagination.
+
+    Returns a paginated list of recent user interactions (views, clicks, runs, likes, etc.)
+    with details about the interacted items (tools, workflows, etc.).
+    """
+    # Calculate offset for pagination
+    offset = (page - 1) * page_size
+
+    # Get total count of user interactions
+    count_result = await db.execute(
+        select(func.count(UserInteraction.id))
+        .where(UserInteraction.user_id == current_user.id)
+    )
+    total = count_result.scalar() or 0
+
+    # Fetch paginated interactions ordered by most recent first
+    interactions_result = await db.execute(
+        select(UserInteraction)
+        .where(UserInteraction.user_id == current_user.id)
+        .order_by(desc(UserInteraction.created_at))
+        .limit(page_size)
+        .offset(offset)
+    )
+    interactions = interactions_result.scalars().all()
+
+    if not interactions:
+        return ActivityFeedResponse(
+            total=total,
+            items=[],
+            page=page,
+            page_size=page_size
+        )
+
+    # Group item IDs by type for batch fetching
+    tool_ids = []
+    workflow_ids = []
+
+    for interaction in interactions:
+        if interaction.item_type == 'tool':
+            tool_ids.append(interaction.item_id)
+        elif interaction.item_type == 'agent':
+            workflow_ids.append(interaction.item_id)
+        # Note: 'roadmap' type doesn't have a table yet, will be handled later
+
+    # Batch fetch tools
+    tools_map = {}
+    if tool_ids:
+        tools_result = await db.execute(
+            select(Tool)
+            .where(Tool.id.in_(tool_ids))
+        )
+        tools = tools_result.scalars().all()
+        tools_map = {tool.id: tool for tool in tools}
+
+    # Batch fetch workflows
+    workflows_map = {}
+    if workflow_ids:
+        workflows_result = await db.execute(
+            select(AgentWorkflow)
+            .where(AgentWorkflow.id.in_(workflow_ids))
+        )
+        workflows = workflows_result.scalars().all()
+        workflows_map = {workflow.id: workflow for workflow in workflows}
+
+    # Build activity items with item details
+    activity_items = []
+    for interaction in interactions:
+        item_name = None
+        item_name_zh = None
+
+        if interaction.item_type == 'tool':
+            tool = tools_map.get(interaction.item_id)
+            if tool:
+                item_name = tool.name
+                item_name_zh = tool.name_zh
+        elif interaction.item_type == 'agent':
+            workflow = workflows_map.get(interaction.item_id)
+            if workflow:
+                item_name = workflow.name
+                item_name_zh = workflow.name_zh
+        # For roadmap or other types, item_name will be None for now
+
+        activity_item = ActivityItemResponse(
+            id=interaction.id,
+            item_type=interaction.item_type,
+            item_id=interaction.item_id,
+            item_name=item_name,
+            item_name_zh=item_name_zh,
+            action=interaction.action,
+            timestamp=interaction.created_at,
+            meta_data=interaction.meta_data
+        )
+        activity_items.append(activity_item)
+
+    return ActivityFeedResponse(
+        total=total,
+        items=activity_items,
+        page=page,
+        page_size=page_size
+    )
+
+
 # Note: The following endpoints will be implemented in subsequent subtasks:
-# - GET /activity - Get recent activity feed (subtask 1.2)
 # - GET /saved - Get saved/starred items (subtask 1.3)
 # - POST /star - Toggle star status (subtask 1.3)
 # - GET /recommendations - Get personalized recommendations (subtask 1.4)
