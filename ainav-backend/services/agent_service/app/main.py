@@ -6,6 +6,7 @@ This is the core of the Agentic Creation Platform.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from shared.config import settings
 
 from .routers import skills, workflows, executions, chat, analytics, collaboration
 
@@ -21,7 +22,7 @@ app = FastAPI(
 # CORS middleware for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
