@@ -72,6 +72,53 @@ class SkillResponse(SkillBase):
         from_attributes = True
 
 
+class SkillTestRequest(BaseModel):
+    """Request to test a skill with sample data."""
+    test_data: Optional[dict[str, Any]] = None
+
+
+class SkillTestResponse(BaseModel):
+    """Response from testing a skill."""
+    success: bool
+    status_code: int
+    response_data: Optional[Any] = None
+    execution_time_ms: int
+    error_message: Optional[str] = None
+
+
+class ToolInfo(BaseModel):
+    """Basic tool information for documentation."""
+    id: UUID
+    name: str
+    name_zh: Optional[str] = None
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    url: Optional[str] = None
+
+
+class SkillDocumentationResponse(SkillBase):
+    """Comprehensive skill documentation with tool information."""
+    id: UUID
+    tool_id: UUID
+    is_active: bool
+    usage_count: int
+    avg_latency_ms: float
+    created_at: datetime
+    updated_at: datetime
+    tool: Optional[ToolInfo] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SkillCodeExamplesResponse(BaseModel):
+    """Code examples for a skill in multiple languages."""
+    python: str
+    javascript: str
+
+
+
+
 # =============================================================================
 # WORKFLOW SCHEMAS
 # =============================================================================
@@ -336,3 +383,97 @@ class TemplateCategoryCount(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# =============================================================================
+# WORKFLOW CATEGORY SCHEMAS
+# =============================================================================
+
+class WorkflowCategoryBase(BaseModel):
+    """Base schema for workflow categories."""
+    name: str = Field(..., max_length=100)
+    name_zh: Optional[str] = Field(None, max_length=100)
+    slug: str = Field(..., max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    order: int = 0
+
+
+class WorkflowCategoryCreate(WorkflowCategoryBase):
+    """Schema for creating a workflow category."""
+    pass
+
+
+class WorkflowCategoryUpdate(BaseModel):
+    """Schema for updating a workflow category."""
+    name: Optional[str] = Field(None, max_length=100)
+    name_zh: Optional[str] = Field(None, max_length=100)
+    slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = None
+    description_zh: Optional[str] = None
+    icon: Optional[str] = Field(None, max_length=255)
+    order: Optional[int] = None
+
+
+class WorkflowCategoryResponse(WorkflowCategoryBase):
+    """Response schema for workflow categories."""
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedWorkflowCategoriesResponse(BaseModel):
+    """Paginated response for workflow categories."""
+    items: list[WorkflowCategoryResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+# =============================================================================
+# WORKFLOW TAG SCHEMAS
+# =============================================================================
+
+class WorkflowTagBase(BaseModel):
+    """Base schema for workflow tags."""
+    name: str = Field(..., max_length=50)
+    name_zh: Optional[str] = Field(None, max_length=50)
+    slug: str = Field(..., max_length=50)
+
+
+class WorkflowTagCreate(WorkflowTagBase):
+    """Schema for creating a workflow tag."""
+    pass
+
+
+class WorkflowTagUpdate(BaseModel):
+    """Schema for updating a workflow tag."""
+    name: Optional[str] = Field(None, max_length=50)
+    name_zh: Optional[str] = Field(None, max_length=50)
+    slug: Optional[str] = Field(None, max_length=50)
+
+
+class WorkflowTagResponse(WorkflowTagBase):
+    """Response schema for workflow tags."""
+    id: UUID
+    usage_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedWorkflowTagsResponse(BaseModel):
+    """Paginated response for workflow tags."""
+    items: list[WorkflowTagResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+

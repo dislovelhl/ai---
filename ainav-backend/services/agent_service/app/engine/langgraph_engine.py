@@ -34,8 +34,8 @@ except ImportError:
     POSTGRES_SAVER_AVAILABLE = False
     AsyncPostgresSaver = None
 
-from app.core.guardrails import guardrails
-from app.core.cache_service import skill_cache
+from ..core.guardrails import guardrails
+from ..core.cache_service import skill_cache
 from shared.config import settings
 
 logger = logging.getLogger(__name__)
@@ -399,7 +399,7 @@ class LangGraphWorkflowEngine:
 
     def _handle_transform(self, state: AgentState, node_id: str, node_data: dict) -> dict:
         """Handle transform node - data manipulation."""
-        from app.core.sandbox import sandbox, SandboxError
+        from ..core.sandbox import sandbox, SandboxError
         
         transform_type = node_data.get("transform_type", "passthrough")
 

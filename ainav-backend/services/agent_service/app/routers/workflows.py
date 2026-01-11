@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
 from ..schemas import (
     WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowSummary,
-    PaginatedWorkflowsResponse, TemplateCategoryCount
+    PaginatedWorkflowsResponse, TemplateCategoryCount,
+    WorkflowRevert, VersionComparison, VersionSnapshot, NodeDiff, EdgeDiff
 )
 
 router = APIRouter()

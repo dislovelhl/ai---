@@ -632,3 +632,63 @@ class AdminActivityLog(Base, TimestampMixin):
 
     # Relationship
     admin = relationship("User", foreign_keys=[admin_id])
+
+
+class SearchHistory(Base, TimestampMixin):
+    """
+    SearchHistory: Tracks user search queries for analytics and suggestions.
+    """
+    __tablename__ = "search_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+
+    # Search details
+    query = Column(String(500), nullable=False, index=True)
+    search_type = Column(String(50), default="general")  # 'general', 'tools', 'workflows', 'learning'
+    
+    # Result info
+    result_count = Column(Integer, default=0)
+    
+    # Relationship
+    user = relationship("User")
+
+
+class CrawledContent(Base, TimestampMixin):
+    """
+    CrawledContent: Stores crawled/scraped content pending admin review.
+    Used by automation service for tool discovery.
+    """
+    __tablename__ = "crawled_content"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Content source
+    source = Column(String(100), nullable=False)  # 'github', 'producthunt', 'manual', etc.
+    url = Column(String(1024), nullable=False, index=True)
+    
+    # Extracted data
+    name = Column(String(255), nullable=False)
+    name_zh = Column(String(255))
+    description = Column(Text)
+    description_zh = Column(Text)
+    logo_url = Column(String(512))
+    
+    # Metadata
+    raw_data = Column(JSON)  # Store original crawled data
+    
+    # Processing status
+    status = Column(String(50), default="pending")  # 'pending', 'approved', 'rejected', 'duplicate'
+    
+    # Duplicate detection
+    duplicate_of_id = Column(UUID(as_uuid=True), ForeignKey("tools.id"), nullable=True)
+    similarity_score = Column(Float, nullable=True)  # For fuzzy duplicate detection
+    
+    # Review info
+    reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    
+    # Relationship
+    duplicate_of = relationship("Tool")
+
