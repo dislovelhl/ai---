@@ -102,6 +102,11 @@ class WorkflowCreate(WorkflowBase):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     is_public: bool = False
     is_template: bool = False
+    # Template-specific metadata
+    category: Optional[str] = Field(None, max_length=100)
+    use_case: Optional[str] = Field(None, max_length=255)
+    usage_instructions_zh: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class WorkflowUpdate(BaseModel):
@@ -119,6 +124,11 @@ class WorkflowUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     is_public: Optional[bool] = None
     is_template: Optional[bool] = None
+    # Template-specific metadata
+    category: Optional[str] = Field(None, max_length=100)
+    use_case: Optional[str] = Field(None, max_length=255)
+    usage_instructions_zh: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class WorkflowResponse(WorkflowBase):
@@ -137,6 +147,11 @@ class WorkflowResponse(WorkflowBase):
     fork_count: int
     run_count: int
     star_count: int
+    # Template-specific metadata
+    category: Optional[str]
+    use_case: Optional[str]
+    usage_instructions_zh: Optional[str]
+    tags: Optional[list[str]]
     created_at: datetime
     updated_at: datetime
 
@@ -154,9 +169,14 @@ class WorkflowSummary(BaseModel):
     icon: Optional[str]
     trigger_type: str
     is_public: bool
+    is_template: bool
     fork_count: int
     run_count: int
     star_count: int
+    # Template-specific metadata
+    category: Optional[str]
+    use_case: Optional[str]
+    tags: Optional[list[str]]
     created_at: datetime
 
     class Config:
