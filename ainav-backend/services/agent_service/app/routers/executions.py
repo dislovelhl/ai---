@@ -17,6 +17,7 @@ from ..schemas import (
     PaginatedExecutionsResponse, ReactFlowNode, ReactFlowEdge
 )
 from ..core.executor import WorkflowExecutor
+from ..dependencies import get_current_user_id
 
 # Try to import LangGraph engine (optional dependency)
 try:
@@ -113,31 +114,34 @@ async def get_execution(
 async def run_workflow(
     execution_data: ExecutionCreate,
     background_tasks: BackgroundTasks,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Execute a workflow. Creates an execution record and runs in background.
+
+    Requires authentication. User must own the workflow or workflow must be public.
     """
     # Get workflow
     workflow_result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == execution_data.workflow_id)
     )
     workflow = workflow_result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
+
+    # Check workflow access: user must own it or it must be public
+    if not workflow.is_public and workflow.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to execute this workflow"
+        )
+
     # Create execution record
     execution = AgentExecution(
         workflow_id=workflow.id,
-        user_id=user.id,
+        user_id=user_id,
         status="pending",
         input_data=execution_data.input_data,
         trigger_type=execution_data.trigger_type,
