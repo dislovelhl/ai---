@@ -284,3 +284,28 @@ class WorkflowSchedule(Base, TimestampMixin):
     # Relationships
     workflow = relationship("AgentWorkflow")
     created_by = relationship("User")
+
+
+class WorkflowWebhook(Base, TimestampMixin):
+    """
+    WorkflowWebhook: Webhook trigger configuration for agent workflows.
+    Allows external systems to trigger workflow execution via HTTP POST.
+    """
+    __tablename__ = "workflow_webhooks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Webhook configuration
+    webhook_secret = Column(String(255), nullable=False)  # Secret token for HMAC signature validation
+    webhook_url_path = Column(String(255), unique=True, index=True, nullable=False)  # Generated unique path
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Security settings
+    allowed_ips = Column(ARRAY(String), nullable=True)  # IP whitelist (null = allow all)
+    max_requests_per_hour = Column(Integer, default=100, nullable=False)  # Rate limiting
+
+    # Relationships
+    workflow = relationship("AgentWorkflow")
+    created_by = relationship("User")
