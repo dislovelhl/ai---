@@ -127,26 +127,28 @@ async def list_workflows(
 async def list_my_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     List current user's workflows.
     """
-    # TODO: Get user_id from auth token
-    # For now, return empty or all for testing
-    query = select(AgentWorkflow).order_by(AgentWorkflow.updated_at.desc())
-    count_query = select(func.count(AgentWorkflow.id))
-    
+    query = select(AgentWorkflow).where(
+        AgentWorkflow.user_id == user_id
+    ).order_by(AgentWorkflow.updated_at.desc())
+    count_query = select(func.count(AgentWorkflow.id)).where(
+        AgentWorkflow.user_id == user_id
+    )
+
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
-    
+
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
-    
+
     result = await db.execute(query)
     workflows = result.scalars().all()
-    
+
     return PaginatedWorkflowsResponse(
         items=[WorkflowSummary.model_validate(w) for w in workflows],
         total=total,
