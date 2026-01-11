@@ -175,9 +175,10 @@ async def execute_workflow_background(
     Background task to execute workflow.
     """
     from shared.database import async_session_factory
-    
+    from ..websocket import manager
+
     start_time = datetime.now(timezone.utc)
-    
+
     async with async_session_factory() as db:
         # Update status to running
         await db.execute(
@@ -186,6 +187,12 @@ async def execute_workflow_background(
             .values(status="running")
         )
         await db.commit()
+
+        # Notify WebSocket clients that execution started
+        await manager.send_execution_status(
+            execution_id=str(execution_id),
+            status="running"
+        )
         
         try:
             # Create executor and run
@@ -195,9 +202,10 @@ async def execute_workflow_background(
                     "model": llm_model,
                     "system_prompt": system_prompt,
                     "temperature": temperature,
-                }
+                },
+                execution_id=execution_id
             )
-            
+
             result = await executor.execute(input_data or {})
             
             end_time = datetime.now(timezone.utc)
@@ -211,6 +219,7 @@ async def execute_workflow_background(
                     status="completed",
                     output_data=result.output,
                     execution_log=result.logs,
+                    execution_steps=result.execution_steps,
                     token_usage=result.token_usage,
                     total_api_calls=result.api_calls,
                     duration_ms=duration_ms,
@@ -223,13 +232,19 @@ async def execute_workflow_background(
                 .where(AgentWorkflow.id == AgentExecution.workflow_id)
                 .values(run_count=AgentWorkflow.run_count + 1)
             )
-            
+
             await db.commit()
+
+            # Notify WebSocket clients that execution completed
+            await manager.send_execution_status(
+                execution_id=str(execution_id),
+                status="completed"
+            )
             
         except Exception as e:
             end_time = datetime.now(timezone.utc)
             duration_ms = int((end_time - start_time).total_seconds() * 1000)
-            
+
             # Update with failure
             await db.execute(
                 update(AgentExecution)
@@ -241,6 +256,13 @@ async def execute_workflow_background(
                 )
             )
             await db.commit()
+
+            # Notify WebSocket clients that execution failed
+            await manager.send_execution_status(
+                execution_id=str(execution_id),
+                status="failed",
+                error_message=str(e)
+            )
 
 
 @router.post("/{execution_id}/cancel", status_code=200)
@@ -321,9 +343,10 @@ async def run_workflow_sync(
                 "model": workflow.llm_model,
                 "system_prompt": workflow.system_prompt,
                 "temperature": workflow.temperature,
-            }
+            },
+            execution_id=execution.id
         )
-        
+
         result = await executor.execute(execution_data.input_data or {})
         
         end_time = datetime.now(timezone.utc)
@@ -333,6 +356,7 @@ async def run_workflow_sync(
         execution.status = "completed"
         execution.output_data = result.output
         execution.execution_log = result.logs
+        execution.execution_steps = result.execution_steps
         execution.token_usage = result.token_usage
         execution.total_api_calls = result.api_calls
         execution.duration_ms = duration_ms
