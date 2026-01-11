@@ -294,10 +294,61 @@ export interface WorkflowUpdate {
   temperature?: number;
   is_public?: boolean;
   is_template?: boolean;
+  version_notes?: string;
 }
 
 export interface ExecutionCreate {
   input_data?: Record<string, unknown>;
   trigger_type?: string;
   trigger_metadata?: Record<string, unknown>;
+}
+
+// =============================================================================
+// VERSION HISTORY TYPES
+// =============================================================================
+
+export interface VersionHistoryEntry {
+  version: number;
+  timestamp: string;
+  notes: string;
+  graph_json: ReactFlowGraph;
+  user_id: string;
+}
+
+export interface VersionSnapshot {
+  version: number;
+  timestamp: string;
+  notes: string;
+  graph_json: Record<string, unknown>;
+  user_id: string;
+}
+
+export interface NodeDiff {
+  node_id: string;
+  change_type: "added" | "removed" | "modified";
+  old_data?: Record<string, unknown>;
+  new_data?: Record<string, unknown>;
+}
+
+export interface EdgeDiff {
+  edge_id: string;
+  change_type: "added" | "removed" | "modified";
+  old_data?: Record<string, unknown>;
+  new_data?: Record<string, unknown>;
+}
+
+export interface VersionComparison {
+  workflow_id: string;
+  version1: VersionSnapshot;
+  version2: VersionSnapshot;
+  nodes_added: NodeDiff[];
+  nodes_removed: NodeDiff[];
+  nodes_modified: NodeDiff[];
+  edges_added: EdgeDiff[];
+  edges_removed: EdgeDiff[];
+  edges_modified: EdgeDiff[];
+}
+
+export interface WorkflowRevert {
+  target_version: number;
 }
