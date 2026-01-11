@@ -5,10 +5,10 @@ from sqlalchemy.orm import selectinload
 from typing import List
 
 from pydantic import UUID4
-from ..dependencies import get_db
+from ..dependencies import get_db, get_current_admin_user
 from ..repository import ScenarioRepository, ToolRepository
 from ..schemas import ScenarioRead, ScenarioCreate, ToolRead, ScenarioUpdate
-from shared.models import Scenario, Tool, tool_scenarios
+from shared.models import Scenario, Tool, tool_scenarios, User
 
 router = APIRouter(prefix="/scenarios", tags=["scenarios"])
 
@@ -57,8 +57,12 @@ async def get_tools_by_scenario(
 
 
 @router.post("/", response_model=ScenarioRead)
-async def create_scenario(scenario_in: ScenarioCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new scenario."""
+async def create_scenario(
+    scenario_in: ScenarioCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Create a new scenario. Requires admin privileges."""
     repo = ScenarioRepository(db)
     existing = await repo.get_by_slug(scenario_in.slug)
     if existing:
@@ -66,7 +70,13 @@ async def create_scenario(scenario_in: ScenarioCreate, db: AsyncSession = Depend
     return await repo.create(**scenario_in.model_dump())
 
 @router.put("/{scenario_id}", response_model=ScenarioRead)
-async def update_scenario(scenario_id: UUID4, scenario_in: ScenarioUpdate, db: AsyncSession = Depends(get_db)):
+async def update_scenario(
+    scenario_id: UUID4,
+    scenario_in: ScenarioUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Update a scenario. Requires admin privileges."""
     repo = ScenarioRepository(db)
     scenario = await repo.update(scenario_id, **scenario_in.model_dump(exclude_unset=True))
     if not scenario:
@@ -74,7 +84,12 @@ async def update_scenario(scenario_id: UUID4, scenario_in: ScenarioUpdate, db: A
     return scenario
 
 @router.delete("/{scenario_id}")
-async def delete_scenario(scenario_id: UUID4, db: AsyncSession = Depends(get_db)):
+async def delete_scenario(
+    scenario_id: UUID4,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Delete a scenario. Requires admin privileges."""
     repo = ScenarioRepository(db)
     success = await repo.delete(scenario_id)
     if not success:
