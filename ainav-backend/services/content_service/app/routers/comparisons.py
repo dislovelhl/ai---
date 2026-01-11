@@ -79,3 +79,54 @@ async def create_comparison(
     await db.refresh(comparison)
 
     return comparison
+
+
+@router.get("/{comparison_id}", response_model=ComparisonDetail)
+async def get_comparison(
+    comparison_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get a comparison by ID with full tool details.
+
+    Returns:
+    - Comparison metadata (id, title, share_token, etc.)
+    - Full tool details for each tool in the comparison
+    - Tools ordered according to the tool_ids array
+
+    Raises:
+    - 404: Comparison not found
+    """
+    # Fetch the comparison
+    query = select(ToolComparison).where(ToolComparison.id == comparison_id)
+    result = await db.execute(query)
+    comparison = result.scalar_one_or_none()
+
+    if not comparison:
+        raise HTTPException(status_code=404, detail="Comparison not found")
+
+    # Fetch all tools in the comparison
+    tools_query = select(Tool).where(Tool.id.in_(comparison.tool_ids))
+    tools_result = await db.execute(tools_query)
+    tools = tools_result.scalars().all()
+
+    # Create a mapping of tool_id to tool object
+    tools_map = {tool.id: tool for tool in tools}
+
+    # Order tools according to tool_ids array
+    ordered_tools = [tools_map[tool_id] for tool_id in comparison.tool_ids if tool_id in tools_map]
+
+    # Build response
+    response = ComparisonDetail(
+        id=comparison.id,
+        user_id=comparison.user_id,
+        title=comparison.title,
+        tool_ids=comparison.tool_ids,
+        share_token=comparison.share_token,
+        is_public=comparison.is_public,
+        created_at=comparison.created_at,
+        updated_at=comparison.updated_at,
+        tools=[ToolComparisonInfo.model_validate(tool) for tool in ordered_tools],
+    )
+
+    return response
