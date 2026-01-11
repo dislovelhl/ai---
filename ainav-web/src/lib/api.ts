@@ -3,6 +3,10 @@ import {
   Scenario,
   Tool,
   ToolCreate,
+  ToolRecommendation,
+  ToolCombination,
+  RelatedScenario,
+  ToolFilters,
   Skill,
   AgentWorkflow,
   AgentExecution,
@@ -122,8 +126,82 @@ export async function getScenarioBySlug(slug: string): Promise<Scenario> {
   return fetchAPI<Scenario>(CONTENT_API, `/scenarios/${slug}`);
 }
 
-export async function getToolsByScenario(slug: string): Promise<Tool[]> {
-  return fetchAPI<Tool[]>(CONTENT_API, `/scenarios/${slug}/tools`);
+/**
+ * Get tools for a scenario, optionally filtered by pricing and accessibility
+ */
+export async function getToolsByScenario(
+  slug: string,
+  filters?: ToolFilters
+): Promise<Tool[]> {
+  const searchParams = new URLSearchParams();
+  if (filters?.pricing_type)
+    searchParams.set("pricing_type", filters.pricing_type);
+  if (filters?.is_china_accessible !== undefined)
+    searchParams.set(
+      "is_china_accessible",
+      filters.is_china_accessible.toString()
+    );
+  if (filters?.requires_vpn !== undefined)
+    searchParams.set("requires_vpn", filters.requires_vpn.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<Tool[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/tools${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get recommended tools for a scenario based on user interactions and ratings
+ */
+export async function getScenarioRecommendations(
+  slug: string,
+  limit?: number
+): Promise<ToolRecommendation[]> {
+  const searchParams = new URLSearchParams();
+  if (limit) searchParams.set("limit", limit.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<ToolRecommendation[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/recommendations${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get commonly used tool combinations for a scenario
+ */
+export async function getToolCombinations(
+  slug: string,
+  minCoOccurrence?: number
+): Promise<ToolCombination[]> {
+  const searchParams = new URLSearchParams();
+  if (minCoOccurrence)
+    searchParams.set("min_co_occurrence", minCoOccurrence.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<ToolCombination[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/combinations${query ? `?${query}` : ""}`
+  );
+}
+
+/**
+ * Get related scenarios based on shared tools (Jaccard similarity)
+ */
+export async function getRelatedScenarios(
+  slug: string,
+  minSimilarity?: number
+): Promise<RelatedScenario[]> {
+  const searchParams = new URLSearchParams();
+  if (minSimilarity)
+    searchParams.set("min_similarity", minSimilarity.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<RelatedScenario[]>(
+    CONTENT_API,
+    `/scenarios/${slug}/related${query ? `?${query}` : ""}`
+  );
 }
 
 // =============================================================================
