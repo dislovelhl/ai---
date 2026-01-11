@@ -1,10 +1,19 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from meilisearch import Client
 from meilisearch.errors import MeilisearchApiError
 from shared.config import settings
+from shared.models import SearchHistory
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from uuid import UUID
+from datetime import datetime
 import logging
+
+# Import local dependencies
+from ..auth import require_authentication
+from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +65,23 @@ class WorkflowSearchResponse(BaseModel):
     estimated_total_hits: int
     page: int
     page_size: int
+
+
+class RecentSearchItem(BaseModel):
+    """Single recent search item."""
+    query: str = Field(..., description="The search query text")
+    query_pinyin: Optional[str] = Field(None, description="Pinyin representation of Chinese query")
+    result_count: int = Field(..., description="Number of results returned for this search")
+    searched_at: datetime = Field(..., description="When the search was performed")
+
+    class Config:
+        from_attributes = True
+
+
+class RecentSearchesResponse(BaseModel):
+    """Response model for recent searches endpoint."""
+    searches: List[RecentSearchItem] = Field(..., description="List of recent unique searches")
+    total: int = Field(..., description="Total number of recent searches returned")
 
 
 # =============================================================================
@@ -445,3 +471,89 @@ async def search_workflows(
     except Exception as e:
         logger.error(f"Unexpected error in workflow search: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# NEW ENDPOINT: Recent Searches
+# =============================================================================
+
+@router.get("/recent", response_model=RecentSearchesResponse)
+async def get_recent_searches(
+    db: AsyncSession = Depends(get_db),
+    user_id: UUID = Depends(require_authentication)
+):
+    """
+    Retrieve user's recent search queries.
+
+    Returns the last 10 unique search queries for the authenticated user,
+    ordered by recency. Duplicate queries are deduplicated, showing only
+    the most recent occurrence of each unique query.
+
+    **Authentication Required:** This endpoint requires a valid JWT token.
+
+    **Returns:**
+    - List of recent searches with query text, result count, and timestamp
+    - Searches are deduplicated by query text (case-sensitive)
+    - Ordered by most recent first
+
+    **Example Response:**
+    ```json
+    {
+      "searches": [
+        {
+          "query": "对话AI",
+          "query_pinyin": "dui hua AI",
+          "result_count": 15,
+          "searched_at": "2026-01-11T12:30:00Z"
+        }
+      ],
+      "total": 10
+    }
+    ```
+    """
+    try:
+        # Query to get recent searches with deduplication
+        # We use DISTINCT ON to get only the most recent search for each unique query
+        # PostgreSQL DISTINCT ON requires the columns to be in ORDER BY
+        subquery = (
+            select(SearchHistory)
+            .where(SearchHistory.user_id == user_id)
+            .order_by(
+                SearchHistory.query,
+                SearchHistory.created_at.desc()
+            )
+            .distinct(SearchHistory.query)
+            .limit(10)
+        )
+
+        # Execute the query
+        result = await db.execute(subquery)
+        search_records = result.scalars().all()
+
+        # Convert to response models
+        searches = [
+            RecentSearchItem(
+                query=record.query,
+                query_pinyin=record.query_pinyin,
+                result_count=record.result_count,
+                searched_at=record.created_at
+            )
+            for record in search_records
+        ]
+
+        # Re-sort by searched_at descending (since DISTINCT ON sorted by query first)
+        searches.sort(key=lambda x: x.searched_at, reverse=True)
+
+        logger.info(f"Retrieved {len(searches)} recent searches for user {user_id}")
+
+        return RecentSearchesResponse(
+            searches=searches,
+            total=len(searches)
+        )
+
+    except Exception as e:
+        logger.error(f"Error retrieving recent searches for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve recent searches"
+        )
