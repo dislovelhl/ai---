@@ -64,3 +64,8 @@ ainav-web/.next_dev/
 ainav-web/.npm/
 .config/
 studio.html
+*.coverage
+.coverage
+coverage.xml
+htmlcov/
+.coverage.*
