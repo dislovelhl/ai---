@@ -8,6 +8,10 @@ import { useFlowStore } from "@/stores/flowStore";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "../code-block";
 import { NodeStatusIndicator, type NodeStatus } from "../node-status-indicator";
+import {
+  InlineSelect,
+  type InlineSelectOption,
+} from "../inline-editors";
 
 interface OutputNodeData {
   label?: string;
@@ -18,6 +22,14 @@ interface OutputNodeData {
   isPreview?: boolean;
   codeLanguage?: string;
 }
+
+// Output format options
+const OUTPUT_FORMAT_OPTIONS: InlineSelectOption[] = [
+  { value: "text", label: "Text" },
+  { value: "json", label: "JSON" },
+  { value: "markdown", label: "Markdown" },
+  { value: "code", label: "Code" },
+];
 
 /**
  * OutputNode - Endpoint of a workflow.
@@ -32,9 +44,16 @@ export const OutputNode = memo(function OutputNode({
   const isPreview = nodeData.isPreview;
 
   const liveUsers = useFlowStore((state) => state.liveUsers);
+  const updateNodeData = useFlowStore((state) => state.updateNodeData);
   const collaborators = Object.values(liveUsers).filter(
     (u) => u.activeNodeId === id
   );
+
+  // Disable editing when node is processing
+  const isProcessing =
+    nodeData.status === "pending" ||
+    nodeData.status === "running" ||
+    nodeData.status === "completed";
 
   const [isJustConverted, setIsJustConverted] = React.useState(false);
   const prevIsPreview = React.useRef(isPreview);
@@ -106,18 +125,37 @@ export const OutputNode = memo(function OutputNode({
             size="sm"
             className="[&_svg]:text-white/80 [&_div]:bg-white/20"
           />
-          <div className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-mono uppercase">
-            {nodeData.format || "Auto"}
-          </div>
+          <InlineSelect
+            value={nodeData.format || "text"}
+            onChange={(value) =>
+              updateNodeData(id, {
+                format: value as "text" | "json" | "markdown" | "code",
+              })
+            }
+            options={OUTPUT_FORMAT_OPTIONS}
+            placeholder="Select format..."
+            className="min-w-[80px]"
+            selectClassName="text-[10px] h-6"
+            displayClassName="text-[10px] bg-white/20 hover:bg-white/30 px-1.5 py-0.5 min-h-[22px] font-mono uppercase border-white/20"
+            disabled={isProcessing}
+          />
         </div>
       </div>
 
-      {/* Input handle */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!w-3 !h-3 !bg-background !border-2 !border-blue-600 !-left-1.5"
-      />
+      {/* Final result input handle with visual indicator */}
+      <div className="absolute -left-2 top-1/2 -translate-y-1/2 group">
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="input"
+          className="!static !transform-none !w-4 !h-4 !bg-background !border-2 !border-blue-500 !rounded-full hover:!border-blue-600 transition-all hover:!scale-110"
+          title="Final result input: Any data type"
+        />
+        {/* Outer glow ring */}
+        <div className="absolute inset-0 -z-10 w-4 h-4 rounded-full bg-blue-500/30 group-hover:bg-blue-500/50 transition-colors" />
+        {/* Pulsing indicator ring on hover */}
+        <div className="absolute -inset-1 -z-20 w-6 h-6 -left-1 -top-1 rounded-full border-2 border-blue-400/50 opacity-0 group-hover:opacity-100 group-hover:animate-ping transition-opacity" />
+      </div>
 
       <div className="p-4">
         {nodeData.status === "error" ? (

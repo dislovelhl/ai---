@@ -66,6 +66,135 @@ export interface UserPresence {
   activeNodeId?: string;
 }
 
+// Connection types for workflow edges
+export type ConnectionType = "data" | "control" | "error";
+
+// Visual configuration for each connection type
+export interface ConnectionTypeStyle {
+  color: string; // HSL color value
+  strokeWidth: number;
+  strokeDasharray?: string; // CSS stroke-dasharray value (e.g., "5,5" for dashed)
+  animationColor: string; // Color for the animated packet
+  label?: string; // Optional default label
+  description: string; // Description for tooltips
+}
+
+// Connection type visual styles configuration
+export const CONNECTION_TYPE_STYLES: Record<
+  ConnectionType,
+  ConnectionTypeStyle
+> = {
+  data: {
+    color: "hsl(217, 91%, 60%)", // Blue - primary data flow
+    strokeWidth: 2,
+    strokeDasharray: undefined, // Solid line
+    animationColor: "hsl(217, 91%, 60%)",
+    label: "Data",
+    description: "Transfers data between nodes (text, JSON, numbers, etc.)",
+  },
+  control: {
+    color: "hsl(142, 71%, 45%)", // Green - control flow
+    strokeWidth: 2,
+    strokeDasharray: "8,4", // Dashed line
+    animationColor: "hsl(142, 71%, 45%)",
+    label: "Control",
+    description: "Controls execution flow (triggers, conditions, loops)",
+  },
+  error: {
+    color: "hsl(0, 84%, 60%)", // Red - error handling
+    strokeWidth: 2,
+    strokeDasharray: "4,4", // Dotted line
+    animationColor: "hsl(0, 84%, 60%)",
+    label: "Error",
+    description: "Handles errors and exceptions from upstream nodes",
+  },
+};
+
+// Helper function to get connection type from edge data or default to 'data'
+export function getConnectionType(
+  edgeData?: Record<string, unknown>
+): ConnectionType {
+  const type = edgeData?.connectionType as ConnectionType | undefined;
+  return type && ["data", "control", "error"].includes(type) ? type : "data";
+}
+
+// Helper function to get connection style by type
+export function getConnectionStyle(
+  connectionType: ConnectionType
+): ConnectionTypeStyle {
+  return CONNECTION_TYPE_STYLES[connectionType];
+}
+
+// Helper function to determine connection type from handle IDs
+export function determineConnectionType(
+  sourceHandleId: string | null | undefined,
+  targetHandleId: string | null | undefined
+): ConnectionType {
+  // Handle IDs can be: "data", "control", "error"
+  // If no handle ID specified, default to "data"
+
+  const sourceType = sourceHandleId as ConnectionType | null | undefined;
+  const targetType = targetHandleId as ConnectionType | null | undefined;
+
+  // Error handles take precedence (error handling flow)
+  if (sourceType === "error" || targetType === "error") {
+    return "error";
+  }
+
+  // Control handles for execution flow
+  if (sourceType === "control" || targetType === "control") {
+    return "control";
+  }
+
+  // Default to data flow
+  return "data";
+}
+
+// Helper function to validate if a connection is allowed
+export function isValidConnection(
+  connection: Connection,
+  nodes: AppNode[]
+): boolean {
+  // Prevent self-connections
+  if (connection.source === connection.target) {
+    return false;
+  }
+
+  // Get source and target nodes
+  const sourceNode = nodes.find((n) => n.id === connection.source);
+  const targetNode = nodes.find((n) => n.id === connection.target);
+
+  if (!sourceNode || !targetNode) {
+    return false;
+  }
+
+  // Determine connection type
+  const connectionType = determineConnectionType(
+    connection.sourceHandle,
+    connection.targetHandle
+  );
+
+  // Validate based on connection type
+  switch (connectionType) {
+    case "data":
+      // Data connections are generally allowed between all node types
+      return true;
+
+    case "control":
+      // Control connections should connect execution flow
+      // For now, allow all but could be restricted based on node types
+      return true;
+
+    case "error":
+      // Error connections should only connect to error-handling nodes
+      // For now, allow all but could validate target node supports error handling
+      return true;
+
+    default:
+      return true;
+  }
+}
+
 // Node data types - must extend Record<string, unknown> for React Flow
 export interface BaseNodeData extends Record<string, unknown> {
   label?: string;
@@ -179,6 +308,7 @@ interface FlowState {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
+  isValidConnection: (connection: Connection) => boolean;
 
   // Actions
   addNode: (
@@ -338,14 +468,36 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     });
   },
 
+  // Validate connection
+  isValidConnection: (connection: Connection) => {
+    const nodes = get().nodes;
+    return isValidConnection(connection, nodes);
+  },
+
   // Connect nodes
   onConnect: (connection: Connection) => {
+    const nodes = get().nodes;
     const edges = get().edges;
+
+    // Validate connection
+    if (!isValidConnection(connection, nodes)) {
+      return;
+    }
+
+    // Determine connection type from handles
+    const connectionType = determineConnectionType(
+      connection.sourceHandle,
+      connection.targetHandle
+    );
+
     const nextEdges = addEdge(
       {
         ...connection,
         type: "animated",
-        data: { isAnimating: false },
+        data: {
+          isAnimating: false,
+          connectionType,
+        },
       },
       edges
     );
