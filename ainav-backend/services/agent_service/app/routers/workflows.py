@@ -232,6 +232,29 @@ async def list_public_workflows(
     )
 
 
+@router.get("/templates/featured", response_model=list[WorkflowSummary])
+async def get_featured_templates(
+    limit: int = Query(6, ge=1, le=20, description="Number of featured templates to return"),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Get featured workflow templates for homepage.
+    Returns top templates by popularity (star_count + run_count).
+    """
+    query = select(AgentWorkflow).where(
+        AgentWorkflow.is_template == True,
+        AgentWorkflow.is_public == True
+    ).order_by(
+        (AgentWorkflow.star_count + AgentWorkflow.run_count).desc(),
+        AgentWorkflow.created_at.desc()
+    ).limit(limit)
+
+    result = await db.execute(query)
+    templates = result.scalars().all()
+
+    return [WorkflowSummary.model_validate(t) for t in templates]
+
+
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(
     workflow_id: UUID,
@@ -244,12 +267,12 @@ async def get_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Check permissions (owner or public)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
