@@ -1,6 +1,6 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, String, Text, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
