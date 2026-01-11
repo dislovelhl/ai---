@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """
 Authentication dependencies for agent_service.
 
@@ -52,3 +53,31 @@ async def get_admin_user(
 ) -> User:
     """Dependency to get the current active admin user."""
     return user
+||||||| c16401e
+=======
+"""
+Agent service dependencies.
+
+Re-exports shared authentication dependencies for use within the agent service.
+All authentication logic is now centralized in shared.auth module.
+"""
+
+from shared.auth import (
+    get_db,
+    get_current_user,
+    get_current_user_id,
+    get_current_active_user,
+    get_optional_user,
+    oauth2_scheme
+)
+
+# Re-export all dependencies for use in agent service routers
+__all__ = [
+    "get_db",
+    "get_current_user",
+    "get_current_user_id",
+    "get_current_active_user",
+    "get_optional_user",
+    "oauth2_scheme"
+]
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services

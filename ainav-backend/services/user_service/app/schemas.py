@@ -32,7 +32,7 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    username: Optional[str] = None
+    user_id: Optional[str] = None
 
 # Password Reset Schemas
 class ForgotPasswordRequest(BaseModel):

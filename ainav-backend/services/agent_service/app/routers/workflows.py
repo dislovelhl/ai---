@@ -10,8 +10,17 @@ from uuid import UUID, uuid4
 import math
 import re
 
-from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
+<<<<<<< HEAD
+||||||| c16401e
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+=======
+from ..dependencies import get_current_user_id, get_optional_user, get_db
+from ..schemas import (
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse,
+    WorkflowSummary, PaginatedWorkflowsResponse
+)
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
 from ..dependencies import get_current_user_id, get_optional_current_user_id, get_current_active_user
 from ..schemas import (
@@ -52,29 +61,51 @@ def generate_slug(name: str) -> str:
 async def list_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+<<<<<<< HEAD
     user_id: Optional[UUID] = Depends(get_optional_current_user_id),
+||||||| c16401e
+    user_id: Optional[UUID] = None,  # TODO: Get from auth
+=======
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     is_public: Optional[bool] = None,
     is_template: Optional[bool] = None,
     search: Optional[str] = None,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     List agent workflows with optional filtering.
+<<<<<<< HEAD
 
     If authenticated, shows user's workflows + public workflows.
     If unauthenticated, shows public workflows only.
+||||||| c16401e
+=======
+    Shows public workflows, plus authenticated user's private workflows.
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
     query = select(AgentWorkflow)
     count_query = select(func.count(AgentWorkflow.id))
+<<<<<<< HEAD
 
     # If authenticated, show user's workflows + public workflows
     if user_id:
+||||||| c16401e
+    
+    # For now, if no user_id provided, show public workflows only
+    if user_id:
+=======
+
+    # If user is authenticated, show their workflows + public ones
+    # If not authenticated, show only public workflows
+    if current_user:
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
         query = query.where(
-            (AgentWorkflow.user_id == user_id) |
+            (AgentWorkflow.user_id == current_user.id) |
             (AgentWorkflow.is_public == True)
         )
         count_query = count_query.where(
-            (AgentWorkflow.user_id == user_id) |
+            (AgentWorkflow.user_id == current_user.id) |
             (AgentWorkflow.is_public == True)
         )
     else:
@@ -129,11 +160,19 @@ async def list_workflows(
 async def list_my_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+<<<<<<< HEAD
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    db: AsyncSession = Depends(get_async_session),
+=======
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-    List current user's workflows.
+    List current user's workflows (requires authentication).
     """
     query = select(AgentWorkflow).where(
         AgentWorkflow.user_id == user_id
@@ -166,7 +205,7 @@ async def list_public_workflows(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     is_template: Optional[bool] = None,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     List public/community workflows.
@@ -215,14 +254,26 @@ async def list_public_workflows(
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(
     workflow_id: UUID,
+<<<<<<< HEAD
     user_id: Optional[UUID] = Depends(get_optional_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    db: AsyncSession = Depends(get_async_session),
+=======
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
     Get a specific workflow by ID.
+<<<<<<< HEAD
 
     Public workflows accessible without auth.
     Private workflows require authentication and ownership.
+||||||| c16401e
+=======
+    Public workflows accessible to all, private workflows only to owner.
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
@@ -231,6 +282,7 @@ async def get_workflow(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+<<<<<<< HEAD
 
     # Check permissions: public workflows accessible to all, private only to owner
     if not workflow.is_public:
@@ -239,20 +291,44 @@ async def get_workflow(
         if workflow.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to access this workflow")
 
+||||||| c16401e
+    
+    # TODO: Check permissions (owner or public)
+    
+=======
+
+    # Check permissions: must be public or owned by current user
+    if not workflow.is_public:
+        if not current_user or workflow.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     return WorkflowResponse.model_validate(workflow)
 
 
 @router.get("/by-slug/{slug}", response_model=WorkflowResponse)
 async def get_workflow_by_slug(
     slug: str,
+<<<<<<< HEAD
     user_id: Optional[UUID] = Depends(get_optional_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    db: AsyncSession = Depends(get_async_session),
+=======
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
     Get a specific workflow by slug.
+<<<<<<< HEAD
 
     Public workflows accessible without auth.
     Private workflows require authentication and ownership.
+||||||| c16401e
+=======
+    Public workflows accessible to all, private workflows only to owner.
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == slug)
@@ -261,6 +337,7 @@ async def get_workflow_by_slug(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+<<<<<<< HEAD
 
     # Check permissions: public workflows accessible to all, private only to owner
     if not workflow.is_public:
@@ -269,17 +346,35 @@ async def get_workflow_by_slug(
         if workflow.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to access this workflow")
 
+||||||| c16401e
+    
+=======
+
+    # Check permissions: must be public or owned by current user
+    if not workflow.is_public:
+        if not current_user or workflow.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     return WorkflowResponse.model_validate(workflow)
 
 
 @router.post("", response_model=WorkflowResponse, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
+<<<<<<< HEAD
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    db: AsyncSession = Depends(get_async_session),
+=======
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-    Create a new agent workflow.
+    Create a new agent workflow (requires authentication).
     """
     # Check slug uniqueness
     existing = await db.execute(
@@ -306,11 +401,18 @@ async def create_workflow(
 async def update_workflow(
     workflow_id: UUID,
     workflow_data: WorkflowUpdate,
+<<<<<<< HEAD
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    db: AsyncSession = Depends(get_async_session),
+=======
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-    Update an existing workflow.
+    Update an existing workflow (requires authentication).
     Increments version and records history when graph changes.
     """
     from datetime import datetime
@@ -322,10 +424,20 @@ async def update_workflow(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+<<<<<<< HEAD
 
     # Verify ownership
     if workflow.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this workflow")
+||||||| c16401e
+    
+    # TODO: Check ownership
+=======
+
+    # Check ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this workflow")
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     
     update_data = workflow_data.model_dump(exclude_unset=True)
     
@@ -356,11 +468,18 @@ async def update_workflow(
 @router.delete("/{workflow_id}", status_code=204)
 async def delete_workflow(
     workflow_id: UUID,
+<<<<<<< HEAD
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    db: AsyncSession = Depends(get_async_session),
+=======
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-    Delete a workflow.
+    Delete a workflow (requires authentication and ownership).
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
@@ -369,11 +488,23 @@ async def delete_workflow(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+<<<<<<< HEAD
 
     # Verify ownership
     if workflow.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this workflow")
 
+||||||| c16401e
+    
+    # TODO: Check ownership
+    
+=======
+
+    # Check ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this workflow")
+
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     await db.delete(workflow)
     await db.commit()
 
@@ -381,11 +512,19 @@ async def delete_workflow(
 @router.post("/{workflow_id}/fork", response_model=WorkflowResponse, status_code=201)
 async def fork_workflow(
     workflow_id: UUID,
+<<<<<<< HEAD
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
+||||||| c16401e
+    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    db: AsyncSession = Depends(get_async_session),
+=======
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+>>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-    Fork (clone) a public workflow to user's collection.
+    Fork (clone) a public workflow to user's collection (requires authentication).
     """
     # Get original workflow
     result = await db.execute(
@@ -433,7 +572,7 @@ async def fork_workflow(
 @router.post("/{workflow_id}/star", status_code=200)
 async def star_workflow(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Star/upvote a workflow.
@@ -442,21 +581,21 @@ async def star_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Track user stars to prevent duplicate starring
     workflow.star_count += 1
     await db.commit()
-    
+
     return {"star_count": workflow.star_count}
 
 
 @router.get("/{workflow_id}/versions")
 async def get_workflow_versions(
     workflow_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get version history for a workflow.
@@ -465,10 +604,10 @@ async def get_workflow_versions(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     return {
         "workflow_id": str(workflow.id),
         "current_version": workflow.version or 1,
