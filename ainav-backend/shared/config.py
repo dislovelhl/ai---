@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     
     # --- Redis ---
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Redis connection pool settings for rate limiting
+    REDIS_MAX_CONNECTIONS: int = 20
+    REDIS_SOCKET_TIMEOUT: int = 5  # seconds
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 5  # seconds
     
     # --- Meilisearch ---
     MEILISEARCH_URL: str = "http://localhost:7700"
