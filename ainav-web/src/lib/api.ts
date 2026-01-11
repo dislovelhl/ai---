@@ -12,6 +12,8 @@ import {
   ChatResponse,
   ChatMessage,
   UsageStats,
+  FacetedSearchResponse,
+  SearchFilters,
 } from "./types";
 
 // =============================================================================
@@ -22,8 +24,7 @@ const CONTENT_API =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/v1";
 const SEARCH_API =
   process.env.NEXT_PUBLIC_SEARCH_API || "http://localhost:8002/v1";
-const USER_API =
-  process.env.NEXT_PUBLIC_USER_API || "http://localhost:8003/v1";
+const USER_API = process.env.NEXT_PUBLIC_USER_API || "http://localhost:8003/v1";
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:8005/v1";
 
@@ -174,6 +175,39 @@ export async function searchTools(
   if (scenario) searchParams.set("scenario", scenario);
 
   return fetchAPI<Tool[]>(SEARCH_API, `/search?${searchParams.toString()}`);
+}
+
+/**
+ * Faceted search for tools with filter support and facet counts
+ * Supports filtering by China accessibility, pricing, API availability, and category
+ */
+export async function facetedSearchTools(
+  filters?: SearchFilters
+): Promise<FacetedSearchResponse> {
+  const searchParams = new URLSearchParams();
+
+  if (filters?.q) searchParams.set("q", filters.q);
+  if (filters?.pricing_type)
+    searchParams.set("pricing_type", filters.pricing_type);
+  if (filters?.is_china_accessible !== undefined) {
+    searchParams.set(
+      "is_china_accessible",
+      filters.is_china_accessible.toString()
+    );
+  }
+  if (filters?.has_api !== undefined) {
+    searchParams.set("has_api", filters.has_api.toString());
+  }
+  if (filters?.category) searchParams.set("category", filters.category);
+  if (filters?.page) searchParams.set("page", filters.page.toString());
+  if (filters?.page_size)
+    searchParams.set("page_size", filters.page_size.toString());
+
+  const query = searchParams.toString();
+  return fetchAPI<FacetedSearchResponse>(
+    SEARCH_API,
+    `/search/faceted${query ? `?${query}` : ""}`
+  );
 }
 
 // =============================================================================
@@ -444,14 +478,10 @@ export async function chatWithAgent(
     body.session_id = sessionId;
   }
 
-  return fetchAuthAPI<ChatResponse>(
-    AGENT_API,
-    `/agents/${workflowId}/chat`,
-    {
-      method: "POST",
-      body: JSON.stringify(body),
-    }
-  );
+  return fetchAuthAPI<ChatResponse>(AGENT_API, `/agents/${workflowId}/chat`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 /**

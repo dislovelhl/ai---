@@ -7,20 +7,71 @@ import { Navbar } from "@/components/layout/navbar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Footer } from "@/components/layout/footer";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Suspense, useCallback } from "react";
+import type { SearchFilters } from "@/lib/types";
 
 function ToolsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Parse all filter parameters from URL
   const category = searchParams.get("category");
   const searchQuery = searchParams.get("search");
+  const isChinaAccessible = searchParams.get("is_china_accessible");
+  const hasApi = searchParams.get("has_api");
+  const pricingType = searchParams.get("pricing_type");
+  const page = searchParams.get("page");
+
+  // Build filters object from URL params
+  const filters: SearchFilters = {
+    q: searchQuery || undefined,
+    category: category || undefined,
+    is_china_accessible: isChinaAccessible === "true" ? true : isChinaAccessible === "false" ? false : undefined,
+    has_api: hasApi === "true" ? true : hasApi === "false" ? false : undefined,
+    pricing_type: pricingType as SearchFilters["pricing_type"] || undefined,
+    page: page ? parseInt(page, 10) : 1,
+    page_size: 50,
+  };
+
+  // Function to update URL search params
+  const updateFilters = useCallback((newFilters: Partial<SearchFilters>) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    // Update or remove each filter parameter
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+
+    // Reset to page 1 when filters change (except when only page is changing)
+    if (Object.keys(newFilters).some(key => key !== "page")) {
+      params.set("page", "1");
+    }
+
+    // Update URL with new params
+    router.push(`${pathname}?${params.toString()}`);
+  }, [searchParams, router, pathname]);
 
   const {
     data: tools,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["tools", category, searchQuery],
+    // Include all filter parameters in queryKey for proper caching
+    queryKey: [
+      "tools",
+      filters.q,
+      filters.category,
+      filters.is_china_accessible,
+      filters.has_api,
+      filters.pricing_type,
+      filters.page,
+    ],
     queryFn: () => {
       if (searchQuery) {
         return searchTools(searchQuery);
