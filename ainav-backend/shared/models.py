@@ -99,6 +99,8 @@ class Tool(Base, TimestampMixin):
     scenarios = relationship("Scenario", secondary=tool_scenarios)
     # Relationship to skills
     skills = relationship("Skill", back_populates="tool", cascade="all, delete-orphan")
+    # Relationship to learning paths
+    learning_paths = relationship("LearningPath", secondary=learning_path_tools, back_populates="recommended_tools")
 
 
 class LearningPath(Base, TimestampMixin):
@@ -134,7 +136,7 @@ class LearningPath(Base, TimestampMixin):
     modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
     user_progress = relationship("UserLearningProgress", back_populates="learning_path", cascade="all, delete-orphan")
     certificates = relationship("LearningCertificate", back_populates="learning_path", cascade="all, delete-orphan")
-    recommended_tools = relationship("Tool", secondary=learning_path_tools)
+    recommended_tools = relationship("Tool", secondary=learning_path_tools, back_populates="learning_paths")
 
 
 class LearningPathModule(Base, TimestampMixin):
