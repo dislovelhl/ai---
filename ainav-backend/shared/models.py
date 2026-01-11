@@ -1,9 +1,15 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, String, Text, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
+
+# Conditional import for pgvector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 Base = declarative_base()
 
@@ -233,8 +239,7 @@ class AgentMemory(Base, TimestampMixin):
     
     # Vector embedding for semantic search
     # Using 384 dimensions for MiniLM-L12-v2
-    from pgvector.sqlalchemy import Vector
-    embedding = Column(Vector(384))
+    embedding = Column(Vector(384)) if Vector is not None else None
 
 
 class UserInteraction(Base, TimestampMixin):
@@ -279,7 +284,7 @@ class CrawledContent(Base, TimestampMixin):
     url = Column(String(512), nullable=False, index=True)
 
     # Flexible metadata storage for source-specific fields
-    metadata = Column(JSON)  # {"stars": 1234, "topics": [...], "author": "...", etc.}
+    meta_data = Column(JSON)  # {"stars": 1234, "topics": [...], "author": "...", etc.}
 
     # AI-powered suggestions
     suggested_category = Column(String(100))  # Category slug
