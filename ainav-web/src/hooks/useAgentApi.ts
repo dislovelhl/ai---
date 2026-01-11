@@ -22,6 +22,8 @@ import type {
   WorkflowUpdate,
   ChatResponse,
   ChatMessage,
+  VersionHistoryEntry,
+  VersionComparison,
 } from "@/lib/types";
 
 // =============================================================================
@@ -68,6 +70,13 @@ export const agentKeys = {
   sessionsMy: () => [...agentKeys.sessions(), "my"] as const,
   sessionHistory: (sessionId: string) =>
     [...agentKeys.sessions(), "history", sessionId] as const,
+
+  // Versions
+  versions: () => [...agentKeys.all, "versions"] as const,
+  workflowVersions: (workflowId: string) =>
+    [...agentKeys.versions(), "workflow", workflowId] as const,
+  versionComparison: (workflowId: string, v1: number, v2: number) =>
+    [...agentKeys.versions(), "comparison", workflowId, v1, v2] as const,
 };
 
 // =============================================================================
@@ -642,6 +651,96 @@ export function useMySessions(
     queryKey: agentKeys.sessionsMy(),
     queryFn: () => api.getMySessions(),
     staleTime: 1 * 60 * 1000, // 1 minute
+    ...options,
+  });
+}
+
+// =============================================================================
+// VERSION HISTORY HOOKS
+// =============================================================================
+
+/**
+ * Fetch version history for a workflow
+ */
+export function useWorkflowVersions(
+  workflowId: string,
+  options?: Omit<
+    UseQueryOptions<
+      { workflow_id: string; current_version: number; history: VersionHistoryEntry[] },
+      Error
+    >,
+    "queryKey" | "queryFn"
+  >
+) {
+  return useQuery({
+    queryKey: agentKeys.workflowVersions(workflowId),
+    queryFn: () => api.getWorkflowVersions(workflowId),
+    enabled: !!workflowId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+    ...options,
+  });
+}
+
+/**
+ * Compare two versions of a workflow
+ */
+export function useCompareVersions(
+  workflowId: string,
+  v1: number,
+  v2: number,
+  options?: Omit<
+    UseQueryOptions<VersionComparison, Error>,
+    "queryKey" | "queryFn"
+  >
+) {
+  return useQuery({
+    queryKey: agentKeys.versionComparison(workflowId, v1, v2),
+    queryFn: () => api.compareWorkflowVersions(workflowId, v1, v2),
+    enabled: !!workflowId && v1 !== undefined && v2 !== undefined,
+    staleTime: 5 * 60 * 1000, // 5 minutes - comparisons don't change
+    ...options,
+  });
+}
+
+/**
+ * Revert a workflow to a previous version
+ * Creates a new version entry documenting the revert operation
+ */
+export function useRevertVersion(
+  options?: Omit<
+    UseMutationOptions<
+      AgentWorkflow,
+      Error,
+      { workflowId: string; targetVersion: number }
+    >,
+    "mutationFn"
+  >
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workflowId, targetVersion }) =>
+      api.revertWorkflowVersion(workflowId, targetVersion),
+    onSuccess: (data, variables, context) => {
+      // Update the workflow in cache with new version
+      queryClient.setQueryData(agentKeys.workflow(data.id), data);
+      queryClient.setQueryData(agentKeys.workflowBySlug(data.slug), data);
+
+      // Invalidate version history to show the new revert version
+      queryClient.invalidateQueries({
+        queryKey: agentKeys.workflowVersions(variables.workflowId),
+      });
+
+      // Invalidate workflow lists to refresh version numbers
+      queryClient.invalidateQueries({
+        queryKey: agentKeys.workflowsList(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: agentKeys.workflowsMy(),
+      });
+
+      options?.onSuccess?.(data, variables, context);
+    },
     ...options,
   });
 }
