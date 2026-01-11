@@ -308,3 +308,145 @@ async def _execute_workflow_async(execution_id, workflow: AgentWorkflow):
                 f"Email notification for failed execution {execution_id} "
                 f"will be sent once email service is integrated"
             )
+
+
+@celery_app.task(name="execute_single_scheduled_workflow")
+def execute_single_scheduled_workflow(schedule_id: str):
+    """
+    Execute a single scheduled workflow by schedule ID.
+
+    This task is called by the DatabaseScheduler for individual workflow schedules.
+    Each workflow schedule gets its own Celery Beat entry with its specific cron timing.
+
+    Args:
+        schedule_id: UUID string of the WorkflowSchedule record
+
+    Returns:
+        Dict with execution status and details
+    """
+    return asyncio.run(_execute_single_schedule(schedule_id))
+
+
+async def _execute_single_schedule(schedule_id: str):
+    """
+    Execute a workflow for a specific schedule.
+
+    Args:
+        schedule_id: UUID string of the WorkflowSchedule record
+
+    Returns:
+        Dict with execution details
+    """
+    from uuid import UUID
+
+    now_utc = datetime.now(timezone.utc)
+
+    logger.info(f"Executing scheduled workflow for schedule {schedule_id}")
+
+    async with AsyncSessionLocal() as session:
+        # Get the schedule
+        schedule_result = await session.execute(
+            select(WorkflowSchedule).where(WorkflowSchedule.id == UUID(schedule_id))
+        )
+        schedule = schedule_result.scalar_one_or_none()
+
+        if not schedule:
+            logger.error(f"Schedule {schedule_id} not found")
+            return {
+                "status": "error",
+                "message": f"Schedule {schedule_id} not found",
+                "timestamp": now_utc.isoformat()
+            }
+
+        if not schedule.enabled:
+            logger.info(f"Schedule {schedule_id} is disabled, skipping execution")
+            return {
+                "status": "skipped",
+                "message": "Schedule is disabled",
+                "timestamp": now_utc.isoformat()
+            }
+
+        # Get the workflow
+        workflow_result = await session.execute(
+            select(AgentWorkflow).where(AgentWorkflow.id == schedule.workflow_id)
+        )
+        workflow = workflow_result.scalar_one_or_none()
+
+        if not workflow:
+            logger.error(f"Workflow {schedule.workflow_id} not found for schedule {schedule_id}")
+            return {
+                "status": "error",
+                "message": f"Workflow {schedule.workflow_id} not found",
+                "timestamp": now_utc.isoformat()
+            }
+
+        # Get the user who created the schedule
+        user_result = await session.execute(
+            select(User).where(User.id == schedule.created_by_user_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            logger.error(f"User {schedule.created_by_user_id} not found for schedule {schedule_id}")
+            return {
+                "status": "error",
+                "message": f"User {schedule.created_by_user_id} not found",
+                "timestamp": now_utc.isoformat()
+            }
+
+        # Create execution record
+        execution = AgentExecution(
+            workflow_id=workflow.id,
+            user_id=user.id,
+            status="pending",
+            input_data={},  # Scheduled workflows run without explicit input
+            trigger_type="scheduled",
+            trigger_metadata={
+                "schedule_id": str(schedule.id),
+                "cron_expression": schedule.cron_expression,
+                "timezone": schedule.timezone,
+                "scheduled_time": now_utc.isoformat()
+            },
+            execution_log=[],
+        )
+
+        session.add(execution)
+        await session.flush()  # Get execution ID without committing
+
+        logger.info(
+            f"Created execution {execution.id} for workflow '{workflow.name}' "
+            f"(schedule: {schedule.cron_expression}, timezone: {schedule.timezone})"
+        )
+
+        # Calculate next run time using croniter with timezone awareness
+        next_run_at = _calculate_next_run(
+            schedule.cron_expression,
+            schedule.timezone
+        )
+
+        # Update schedule with new next_run_at and last_run_at
+        schedule.last_run_at = now_utc
+        schedule.next_run_at = next_run_at
+
+        await session.commit()
+
+        # Execute workflow in background
+        asyncio.create_task(
+            _execute_workflow_async(
+                execution_id=execution.id,
+                workflow=workflow
+            )
+        )
+
+        logger.info(
+            f"Scheduled workflow '{workflow.name}' for execution. "
+            f"Next run: {next_run_at.isoformat()}"
+        )
+
+        return {
+            "status": "success",
+            "execution_id": str(execution.id),
+            "workflow_name": workflow.name,
+            "next_run_at": next_run_at.isoformat(),
+            "timestamp": now_utc.isoformat()
+        }

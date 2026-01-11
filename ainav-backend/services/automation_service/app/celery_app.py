@@ -8,7 +8,8 @@ celery_app = Celery(
     backend=settings.REDIS_URL,
     include=[
         "services.automation_service.app.workers.tasks",
-        "services.automation_service.app.workers.workflow_scheduler"
+        "services.automation_service.app.workers.workflow_scheduler",
+        "services.automation_service.app.workers.beat_scheduler"
     ]
 )
 
@@ -39,6 +40,8 @@ celery_app.conf.update(
 
 from celery.schedules import crontab
 
+# Static beat schedules for system tasks
+# Workflow schedules are loaded dynamically by DatabaseScheduler
 celery_app.conf.beat_schedule = {
     "crawl-ph-daily": {
         "task": "crawl_and_enrich_daily",
@@ -52,8 +55,14 @@ celery_app.conf.beat_schedule = {
         "task": "mine_arxiv_papers_daily",
         "schedule": crontab(hour=2, minute=0),
     },
+    # Keep the fallback task that runs every minute as backup
+    # The DatabaseScheduler will add individual workflow schedules dynamically
     "execute-scheduled-workflows": {
         "task": "execute_scheduled_workflows",
-        "schedule": crontab(minute="*"),  # Run every minute
+        "schedule": crontab(minute="*"),  # Run every minute as fallback
     },
 }
+
+# Configure Celery Beat to use our custom DatabaseScheduler
+# This allows dynamic loading of workflow schedules from PostgreSQL
+celery_app.conf.beat_scheduler = 'services.automation_service.app.workers.beat_scheduler:DatabaseScheduler'
