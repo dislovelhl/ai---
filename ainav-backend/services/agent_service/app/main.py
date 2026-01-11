@@ -7,7 +7,7 @@ This is the core of the Agentic Creation Platform.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import skills, workflows, executions, chat, analytics, collaboration, workflow_categories
+from .routers import skills, workflows, executions, chat, analytics, collaboration, workflow_categories, workflow_tags
 
 
 app = FastAPI(
@@ -31,6 +31,7 @@ app.add_middleware(
 app.include_router(skills.router, prefix="/v1/skills", tags=["Skills"])
 app.include_router(workflows.router, prefix="/v1/workflows", tags=["Workflows"])
 app.include_router(workflow_categories.router, prefix="/v1/workflow-categories", tags=["Workflow Categories"])
+app.include_router(workflow_tags.router, prefix="/v1/workflow-tags", tags=["Workflow Tags"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["Executions"])
 app.include_router(chat.router, prefix="/v1/agents", tags=["Agent Chat"])
 app.include_router(analytics.router, prefix="/v1/analytics", tags=["Analytics"])

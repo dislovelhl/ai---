@@ -291,3 +291,41 @@ class PaginatedWorkflowCategoriesResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# =============================================================================
+# WORKFLOW TAG SCHEMAS
+# =============================================================================
+
+class WorkflowTagBase(BaseModel):
+    name: str = Field(..., max_length=50)
+    name_zh: Optional[str] = Field(None, max_length=50)
+    slug: str = Field(..., max_length=50)
+
+
+class WorkflowTagCreate(WorkflowTagBase):
+    pass
+
+
+class WorkflowTagUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=50)
+    name_zh: Optional[str] = Field(None, max_length=50)
+    slug: Optional[str] = Field(None, max_length=50)
+
+
+class WorkflowTagResponse(WorkflowTagBase):
+    id: UUID
+    usage_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedWorkflowTagsResponse(BaseModel):
+    items: list[WorkflowTagResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
