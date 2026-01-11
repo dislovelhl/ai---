@@ -68,17 +68,8 @@ def setup_test_environment():
 # ============================================================================
 # ASYNC EVENT LOOP
 # ============================================================================
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """
-    Create an event loop for the test session.
-
-    This fixture ensures that async tests run in a consistent event loop.
-    """
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Note: We don't override event_loop anymore as pytest-asyncio handles it
+# Tests use the default function-scoped event loop from pytest-asyncio
 
 
 # ============================================================================
@@ -95,30 +86,48 @@ def test_db_url() -> str:
     return db_url
 
 
-@pytest_asyncio.fixture(scope="session")
-async def test_engine(test_db_url: str):
+@pytest.fixture(scope="session")
+def test_engine_sync(test_db_url: str):
     """
-    Create async engine for test database.
+    Create async engine for test database (session-scoped).
 
-    Uses NullPool to avoid connection pool issues in tests.
+    This creates the engine once for all tests. Individual tests use
+    function-scoped sessions with transaction rollback.
     """
+    import asyncio
+
     engine = create_async_engine(
         test_db_url,
         echo=False,  # Set to True for SQL debugging
         poolclass=NullPool,  # Don't pool connections in tests
     )
 
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create all tables at test session start
+    async def create_tables():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(create_tables())
 
     yield engine
 
-    # Drop all tables after tests
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Drop all tables at test session end
+    async def drop_tables():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
 
-    await engine.dispose()
+    asyncio.run(drop_tables())
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_engine(test_engine_sync):
+    """
+    Provide the async engine to function-scoped tests.
+
+    This bridges the session-scoped sync fixture to async tests.
+    """
+    return test_engine_sync
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -136,19 +145,31 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
             await db_session.commit()
             # Transaction automatically rolled back after test
     """
-    # Create session factory
+    # Create a connection that we'll use for the test
+    connection = await test_engine.connect()
+
+    # Begin a transaction
+    transaction = await connection.begin()
+
+    # Create session bound to the transaction
     async_session_maker = async_sessionmaker(
-        test_engine,
+        bind=connection,
         class_=AsyncSession,
         expire_on_commit=False,
+        join_transaction_mode="create_savepoint"
     )
 
-    # Start a transaction
-    async with async_session_maker() as session:
-        async with session.begin():
-            yield session
-            # Transaction is automatically rolled back after yield
-            await session.rollback()
+    session = async_session_maker()
+
+    try:
+        yield session
+    finally:
+        # Close the session
+        await session.close()
+        # Rollback the transaction
+        await transaction.rollback()
+        # Close the connection
+        await connection.close()
 
 
 @pytest.fixture
