@@ -29,6 +29,15 @@ workflow_workflow_tags = Table(
     Column("tag_id", UUID(as_uuid=True), ForeignKey("workflow_tags.id"), primary_key=True),
 )
 
+# Junction table for User and AgentWorkflow stars (prevents duplicate stars, enables unstar)
+workflow_stars = Table(
+    "workflow_stars",
+    Base.metadata,
+    Column("user_id", UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True),
+    Column("workflow_id", UUID(as_uuid=True), ForeignKey("agent_workflows.id"), primary_key=True),
+    Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
+)
+
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
@@ -46,6 +55,7 @@ class User(Base, TimestampMixin):
 
     # Relationship to agent workflows
     workflows = relationship("AgentWorkflow", back_populates="user")
+    starred_workflows = relationship("AgentWorkflow", secondary=workflow_stars, backref="starred_by")
     interactions = relationship("UserInteraction", back_populates="user", cascade="all, delete-orphan")
 
 
