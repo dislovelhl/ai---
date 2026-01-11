@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getToolBySlug, getTools } from "@/lib/api";
+import { getToolBySlug, getTools, getToolAlternatives } from "@/lib/api";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { ToolCard } from "@/components/tools/tool-card";
@@ -44,6 +44,12 @@ export default function ToolDetailPage() {
         limit: 4,
       }),
     enabled: !!tool?.category?.slug,
+  });
+
+  const { data: alternatives, isLoading: alternativesLoading } = useQuery({
+    queryKey: ["tool-alternatives", slug],
+    queryFn: () => getToolAlternatives(slug),
+    enabled: !!tool,
   });
 
   if (toolLoading) {
