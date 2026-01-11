@@ -8,6 +8,7 @@ from shared.models import Tool, Category
 from shared.config import settings
 from shared.embedding import embedding_service
 from shared.chinese_synonyms import get_synonym_pairs
+from shared.pinyin_utils import to_pinyin, to_pinyin_initials
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -305,13 +306,31 @@ async def _sync_to_meilisearch_pipeline():
             text_to_embed = f"{tool.name} {tool.name_zh or ''} {tool.description} {tool.description_zh or ''}"
             vector = embedding_service.generate_embedding(text_to_embed)
 
+            # Generate pinyin fields for Chinese search support
+            name_pinyin = ""
+            name_pinyin_initials = ""
+            description_pinyin = ""
+
+            if tool.name_zh:
+                # Full pinyin for name (e.g., "人工智能" -> "ren gong zhi neng")
+                name_pinyin = to_pinyin(tool.name_zh, separator=" ") or ""
+                # Pinyin initials for quick search (e.g., "人工智能" -> "rgzn")
+                name_pinyin_initials = to_pinyin_initials(tool.name_zh) or ""
+
+            if tool.description_zh:
+                # Full pinyin for description
+                description_pinyin = to_pinyin(tool.description_zh, separator=" ") or ""
+
             documents.append({
                 "id": str(tool.id),
                 "name": tool.name,
                 "name_zh": tool.name_zh or tool.name,
+                "name_pinyin": name_pinyin,
+                "name_pinyin_initials": name_pinyin_initials,
                 "slug": tool.slug,
                 "description": tool.description,
                 "description_zh": tool.description_zh or tool.description,
+                "description_pinyin": description_pinyin,
                 "url": tool.url,
                 "category_name": tool.category.name if tool.category else None,
                 "category_slug": tool.category.slug if tool.category else None,
@@ -352,15 +371,18 @@ async def _sync_to_meilisearch_pipeline():
             index.update_synonyms(synonym_pairs)
             logger.info(f"Uploaded {len(synonym_pairs)} synonym groups for bilingual search")
 
-            # 4. Configure searchable attributes with Chinese prioritization
+            # 4. Configure searchable attributes with Chinese and pinyin prioritization
             # Order matters: earlier fields get higher ranking weight
             index.update_searchable_attributes([
-                "name_zh",           # Prioritize Chinese name (most important for Chinese users)
-                "name",              # English name
-                "description_zh",    # Chinese description
-                "description",       # English description
-                "category_name",     # Category names
-                "scenario_names"     # Scenario names
+                "name_zh",                # Prioritize Chinese name (most important for Chinese users)
+                "name",                   # English name
+                "name_pinyin",            # Full pinyin for name (e.g., "ren gong zhi neng")
+                "name_pinyin_initials",   # Pinyin initials for quick search (e.g., "rgzn")
+                "description_zh",         # Chinese description
+                "description_pinyin",     # Pinyin for description
+                "description",            # English description
+                "category_name",          # Category names
+                "scenario_names"          # Scenario names
             ])
 
             # 5. Add Chinese punctuation to separator tokens
