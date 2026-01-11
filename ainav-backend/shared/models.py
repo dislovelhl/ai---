@@ -242,20 +242,45 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class WorkflowSchedule(Base, TimestampMixin):
+    """
+    WorkflowSchedule: Scheduled execution configuration for agent workflows.
+    Supports cron-based scheduling with timezone awareness.
+    """
+    __tablename__ = "workflow_schedules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Schedule configuration
+    cron_expression = Column(String(100), nullable=False)  # e.g., "0 9 * * *" (daily at 9am)
+    timezone = Column(String(50), default="UTC", nullable=False)  # e.g., "Asia/Shanghai", "America/New_York"
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Execution tracking
+    next_run_at = Column(DateTime(timezone=True))  # Next scheduled execution time
+    last_run_at = Column(DateTime(timezone=True), nullable=True)  # Last successful execution time
+
+    # Relationships
+    workflow = relationship("AgentWorkflow")
+    created_by = relationship("User")
