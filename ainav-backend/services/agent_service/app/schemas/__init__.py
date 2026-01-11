@@ -59,43 +59,6 @@ class SkillResponse(SkillBase):
 
 
 # =============================================================================
-# WORKFLOW CATEGORY SCHEMAS
-# =============================================================================
-
-class WorkflowCategoryBase(BaseModel):
-    name: str = Field(..., max_length=100)
-    name_zh: Optional[str] = Field(None, max_length=100)
-    slug: str = Field(..., max_length=100)
-    description: Optional[str] = None
-    description_zh: Optional[str] = None
-    icon: Optional[str] = Field(None, max_length=255)
-    order: int = Field(default=0)
-
-
-class WorkflowCategoryCreate(WorkflowCategoryBase):
-    pass
-
-
-class WorkflowCategoryUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=100)
-    name_zh: Optional[str] = Field(None, max_length=100)
-    slug: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
-    description_zh: Optional[str] = None
-    icon: Optional[str] = Field(None, max_length=255)
-    order: Optional[int] = None
-
-
-class WorkflowCategoryResponse(WorkflowCategoryBase):
-    id: UUID
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# =============================================================================
 # WORKFLOW SCHEMAS
 # =============================================================================
 
@@ -139,8 +102,11 @@ class WorkflowCreate(WorkflowBase):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     is_public: bool = False
     is_template: bool = False
-    category_id: Optional[UUID] = None
-    tag_ids: list[UUID] = Field(default_factory=list)
+    # Template-specific metadata
+    category: Optional[str] = Field(None, max_length=100)
+    use_case: Optional[str] = Field(None, max_length=255)
+    usage_instructions_zh: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class WorkflowUpdate(BaseModel):
@@ -158,8 +124,11 @@ class WorkflowUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     is_public: Optional[bool] = None
     is_template: Optional[bool] = None
-    category_id: Optional[UUID] = None
-    tag_ids: Optional[list[UUID]] = None
+    # Template-specific metadata
+    category: Optional[str] = Field(None, max_length=100)
+    use_case: Optional[str] = Field(None, max_length=255)
+    usage_instructions_zh: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class WorkflowResponse(WorkflowBase):
@@ -178,8 +147,11 @@ class WorkflowResponse(WorkflowBase):
     fork_count: int
     run_count: int
     star_count: int
-    category_id: Optional[UUID]
-    tags: list["WorkflowTagResponse"] = Field(default_factory=list)
+    # Template-specific metadata
+    category: Optional[str]
+    use_case: Optional[str]
+    usage_instructions_zh: Optional[str]
+    tags: Optional[list[str]]
     created_at: datetime
     updated_at: datetime
 
@@ -197,11 +169,14 @@ class WorkflowSummary(BaseModel):
     icon: Optional[str]
     trigger_type: str
     is_public: bool
+    is_template: bool
     fork_count: int
     run_count: int
     star_count: int
-    category_id: Optional[UUID]
-    tags: list["WorkflowTagResponse"] = Field(default_factory=list)
+    # Template-specific metadata
+    category: Optional[str]
+    use_case: Optional[str]
+    tags: Optional[list[str]]
     created_at: datetime
 
     class Config:
@@ -230,20 +205,6 @@ class ExecutionCreate(BaseModel):
     trigger_metadata: Optional[dict[str, Any]] = None
 
 
-class ExecutionReplayRequest(BaseModel):
-    """Request to replay execution from a specific step."""
-    from_step_id: str = Field(..., description="Node ID from which to resume execution")
-
-
-class ExecutionReplayResponse(BaseModel):
-    """Response from execution replay request."""
-    new_execution_id: UUID
-    parent_execution_id: UUID
-    replayed_from_step: str
-    status: str
-    message: str
-
-
 class ExecutionResponse(BaseModel):
     id: UUID
     workflow_id: UUID
@@ -258,8 +219,6 @@ class ExecutionResponse(BaseModel):
     duration_ms: Optional[int]
     trigger_type: Optional[str]
     trigger_metadata: Optional[dict[str, Any]]
-    parent_execution_id: Optional[UUID] = None
-    replayed_from_step: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -276,42 +235,6 @@ class ExecutionSummary(BaseModel):
     token_usage: int
     trigger_type: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ExecutionStepDetail(BaseModel):
-    """Detailed information for a single execution step."""
-    node_id: str
-    status: str  # 'pending', 'running', 'completed', 'failed'
-    input_data: Optional[Any] = None
-    output_data: Optional[Any] = None
-    error_message: Optional[str] = None
-    token_usage: Optional[dict[str, int]] = None  # {input: int, output: int, total: int}
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-
-
-class ExecutionDetailsResponse(BaseModel):
-    """Detailed execution response including step-by-step execution data."""
-    id: UUID
-    workflow_id: UUID
-    user_id: UUID
-    status: str
-    input_data: Optional[dict[str, Any]]
-    output_data: Optional[dict[str, Any]]
-    error_message: Optional[str]
-    execution_steps: Optional[list[dict[str, Any]]]  # Detailed step data
-    token_usage: int
-    total_api_calls: int
-    duration_ms: Optional[int]
-    trigger_type: Optional[str]
-    trigger_metadata: Optional[dict[str, Any]]
-    parent_execution_id: Optional[UUID] = None
-    replayed_from_step: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -345,47 +268,14 @@ class PaginatedExecutionsResponse(BaseModel):
     pages: int
 
 
-class PaginatedWorkflowCategoriesResponse(BaseModel):
-    items: list[WorkflowCategoryResponse]
-    total: int
-    page: int
-    page_size: int
-    pages: int
-
-
 # =============================================================================
-# WORKFLOW TAG SCHEMAS
+# TEMPLATE CATEGORY SCHEMAS
 # =============================================================================
 
-class WorkflowTagBase(BaseModel):
-    name: str = Field(..., max_length=50)
-    name_zh: Optional[str] = Field(None, max_length=50)
-    slug: str = Field(..., max_length=50)
-
-
-class WorkflowTagCreate(WorkflowTagBase):
-    pass
-
-
-class WorkflowTagUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=50)
-    name_zh: Optional[str] = Field(None, max_length=50)
-    slug: Optional[str] = Field(None, max_length=50)
-
-
-class WorkflowTagResponse(WorkflowTagBase):
-    id: UUID
-    usage_count: int
-    created_at: datetime
-    updated_at: datetime
+class TemplateCategoryCount(BaseModel):
+    """Category with template count for discovery."""
+    category: str
+    count: int
 
     class Config:
         from_attributes = True
-
-
-class PaginatedWorkflowTagsResponse(BaseModel):
-    items: list[WorkflowTagResponse]
-    total: int
-    page: int
-    page_size: int
-    pages: int

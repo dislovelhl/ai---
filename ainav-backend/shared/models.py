@@ -254,6 +254,12 @@ class AgentWorkflow(Base, TimestampMixin):
     fork_count = Column(Integer, default=0)
     run_count = Column(Integer, default=0)
     star_count = Column(Integer, default=0)
+
+    # Template-specific metadata
+    category = Column(String(100), nullable=True)  # 'content-generation', 'translation', 'summarization', 'data-analysis'
+    use_case = Column(String(255), nullable=True)  # Specific use case description
+    usage_instructions_zh = Column(Text, nullable=True)  # Step-by-step usage guide in Chinese
+    tags = Column(ARRAY(String), nullable=True)  # Flexible tags for discovery and filtering
     
     # Version tracking
     version = Column(Integer, default=1, nullable=False)
