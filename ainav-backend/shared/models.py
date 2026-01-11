@@ -16,6 +16,14 @@ class UserRole(str, enum.Enum):
     USER = "user"
 
 
+class ModerationStatus(str, enum.Enum):
+    """Moderation status for submitted content"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    FLAGGED = "flagged"
+
+
 class TimestampMixin:
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -255,20 +263,52 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class ModerationQueue(Base, TimestampMixin):
+    """
+    Tracks user-submitted content pending admin review.
+    Used for workflows shared publicly, tool suggestions, etc.
+    """
+    __tablename__ = "moderation_queue"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Content type and reference
+    content_type = Column(String(50), nullable=False)  # 'workflow', 'tool_suggestion', etc.
+    content_id = Column(UUID(as_uuid=True), nullable=True)  # Reference to actual content (workflow_id, etc.)
+
+    # Submission data (for tool suggestions or draft content)
+    content_data = Column(JSON, nullable=True)  # Flexible storage for submitted data
+
+    # Status
+    status = Column(Enum(ModerationStatus), default=ModerationStatus.PENDING, nullable=False)
+
+    # People involved
+    submitter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    reviewer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    # Review details
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
+    # Relationships
+    submitter = relationship("User", foreign_keys=[submitter_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
