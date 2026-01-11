@@ -11,7 +11,34 @@ class Settings(BaseSettings):
     
     # --- Redis ---
     REDIS_URL: str = "redis://localhost:6379/0"
-    
+
+    # Redis connection pool settings for rate limiting
+    REDIS_MAX_CONNECTIONS: int = 20
+    REDIS_SOCKET_TIMEOUT: int = 5  # seconds
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 5  # seconds
+
+    # --- Rate Limiting Configuration ---
+    # Execution limits per user tier (24-hour window)
+    RATE_LIMIT_FREE_TIER: int = 50  # Free tier: 50 executions per day
+    RATE_LIMIT_PRO_TIER: int = 500  # Pro tier: 500 executions per day
+    RATE_LIMIT_ENTERPRISE_TIER: int = 9999999  # Enterprise tier: effectively unlimited
+    RATE_LIMIT_WINDOW_SECONDS: int = 86400  # 24 hours in seconds
+
+    @property
+    def RATE_LIMIT_CONFIG(self) -> dict[str, int]:
+        """
+        Rate limit configuration dictionary per user tier.
+
+        Returns a dictionary mapping tier names to their execution limits.
+        This allows easy access from rate limiting logic while maintaining
+        the ability to override via environment variables.
+        """
+        return {
+            "free": self.RATE_LIMIT_FREE_TIER,
+            "pro": self.RATE_LIMIT_PRO_TIER,
+            "enterprise": self.RATE_LIMIT_ENTERPRISE_TIER
+        }
+
     # --- Meilisearch ---
     MEILISEARCH_URL: str = "http://localhost:7700"
     MEILISEARCH_KEY: str = "masterKey"

@@ -5,7 +5,7 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 psycopg2-binary==2.9.10
 asyncpg==0.30.0
-redis==5.2.1
+redis==5.2.1  # redis-py with built-in async and cluster support
 celery==5.4.0
 python-multipart==0.0.20
 python-jose[cryptography]==3.3.0

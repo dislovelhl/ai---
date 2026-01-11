@@ -4,22 +4,22 @@ Executions Router - Run workflows and track execution history.
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
-from typing import Optional, Any
+from typing import Optional, Any, List
 from uuid import UUID
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import math
 
 from shared.models import AgentExecution, AgentWorkflow, User
-<<<<<<< HEAD
-from ..dependencies import get_current_active_user, get_current_user_id
-||||||| c16401e
-=======
-from ..dependencies import get_current_user_id, get_optional_user, get_db
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
+from ..dependencies import (
+    get_current_active_user, 
+    get_current_user_id, 
+    get_db,
+    check_execution_rate_limit
+)
 from ..schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionSummary,
-    PaginatedExecutionsResponse, ReactFlowNode, ReactFlowEdge
+    PaginatedExecutionsResponse
 )
 from ..core.executor import WorkflowExecutor
 
@@ -58,46 +58,16 @@ async def list_executions(
     page_size: int = Query(20, ge=1, le=100),
     workflow_id: Optional[UUID] = None,
     status: Optional[str] = None,
-<<<<<<< HEAD
-    user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_session),
-||||||| c16401e
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
-    db: AsyncSession = Depends(get_async_session),
-=======
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-<<<<<<< HEAD
     List execution history with optional filtering.
-
     Requires authentication. Only returns executions owned by the authenticated user.
-||||||| c16401e
-    List execution history with optional filtering.
-=======
-    List execution history with optional filtering (requires authentication).
-    Only returns executions owned by the authenticated user.
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
-<<<<<<< HEAD
-    query = select(AgentExecution)
-    count_query = select(func.count(AgentExecution.id))
-
-    # Filter by authenticated user
-    query = query.where(AgentExecution.user_id == user_id)
-    count_query = count_query.where(AgentExecution.user_id == user_id)
-
-||||||| c16401e
-    query = select(AgentExecution)
-    count_query = select(func.count(AgentExecution.id))
-    
-=======
     query = select(AgentExecution).where(AgentExecution.user_id == user_id)
     count_query = select(func.count(AgentExecution.id)).where(AgentExecution.user_id == user_id)
 
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     if workflow_id:
         query = query.where(AgentExecution.workflow_id == workflow_id)
         count_query = count_query.where(AgentExecution.workflow_id == workflow_id)
@@ -105,15 +75,7 @@ async def list_executions(
     if status:
         query = query.where(AgentExecution.status == status)
         count_query = count_query.where(AgentExecution.status == status)
-<<<<<<< HEAD
-    
-||||||| c16401e
-    
-    # TODO: Filter by user_id from auth
-    
-=======
 
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -135,26 +97,12 @@ async def list_executions(
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 async def get_execution(
     execution_id: UUID,
-<<<<<<< HEAD
-    user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_session),
-||||||| c16401e
-    db: AsyncSession = Depends(get_async_session),
-=======
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-<<<<<<< HEAD
     Get detailed execution information including logs.
-
     Requires authentication. User must own the execution.
-||||||| c16401e
-    Get detailed execution information including logs.
-=======
-    Get detailed execution information including logs (requires authentication).
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
     result = await db.execute(
         select(AgentExecution).where(AgentExecution.id == execution_id)
@@ -163,7 +111,6 @@ async def get_execution(
 
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-<<<<<<< HEAD
 
     # Verify ownership
     if execution.user_id != user_id:
@@ -172,15 +119,6 @@ async def get_execution(
             detail="Not authorized to access this execution"
         )
 
-||||||| c16401e
-    
-=======
-
-    # Check ownership
-    if execution.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     return ExecutionResponse.model_validate(execution)
 
 
@@ -188,26 +126,13 @@ async def get_execution(
 async def run_workflow(
     execution_data: ExecutionCreate,
     background_tasks: BackgroundTasks,
-<<<<<<< HEAD
-    user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_session),
-||||||| c16401e
-    db: AsyncSession = Depends(get_async_session),
-=======
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
+    user: User = Depends(check_execution_rate_limit),
 ):
     """
-<<<<<<< HEAD
     Execute a workflow. Creates an execution record and runs in background.
-
-    Requires authentication. User must own the workflow or workflow must be public.
-||||||| c16401e
-    Execute a workflow. Creates an execution record and runs in background.
-=======
-    Execute a workflow (requires authentication). Creates an execution record and runs in background.
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
+    Requires authentication and checks rate limits.
     """
     # Get workflow
     workflow_result = await db.execute(
@@ -217,7 +142,6 @@ async def run_workflow(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-<<<<<<< HEAD
 
     # Check workflow access: user must own it or it must be public
     if not workflow.is_public and workflow.user_id != user_id:
@@ -226,18 +150,6 @@ async def run_workflow(
             detail="Not authorized to execute this workflow"
         )
 
-||||||| c16401e
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
-=======
-
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     # Create execution record
     execution = AgentExecution(
         workflow_id=workflow.id,
@@ -350,26 +262,12 @@ async def execute_workflow_background(
 @router.post("/{execution_id}/cancel", status_code=200)
 async def cancel_execution(
     execution_id: UUID,
-<<<<<<< HEAD
-    user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_session),
-||||||| c16401e
-    db: AsyncSession = Depends(get_async_session),
-=======
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
 ):
     """
-<<<<<<< HEAD
     Cancel a running execution.
-
     Requires authentication. User must own the execution.
-||||||| c16401e
-    Cancel a running execution.
-=======
-    Cancel a running execution (requires authentication and ownership).
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     """
     result = await db.execute(
         select(AgentExecution).where(AgentExecution.id == execution_id)
@@ -378,7 +276,6 @@ async def cancel_execution(
 
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-<<<<<<< HEAD
 
     # Verify ownership
     if execution.user_id != user_id:
@@ -387,15 +284,6 @@ async def cancel_execution(
             detail="Not authorized to cancel this execution"
         )
 
-||||||| c16401e
-    
-=======
-
-    # Check ownership
-    if execution.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     if execution.status not in ["pending", "running"]:
         raise HTTPException(
             status_code=400,
@@ -411,27 +299,13 @@ async def cancel_execution(
 @router.post("/run-sync", response_model=ExecutionResponse)
 async def run_workflow_sync(
     execution_data: ExecutionCreate,
-<<<<<<< HEAD
-    user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_session),
-||||||| c16401e
-    db: AsyncSession = Depends(get_async_session),
-=======
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
+    user: User = Depends(check_execution_rate_limit),
 ):
     """
     Execute a workflow synchronously (wait for result).
-<<<<<<< HEAD
-    Useful for simple workflows or testing.
-
-    Requires authentication. User must own the workflow or workflow must be public.
-||||||| c16401e
-    Useful for simple workflows or testing.
-=======
-    Useful for simple workflows or testing (requires authentication).
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
+    Requires authentication and checks rate limits.
     """
     # Get workflow
     workflow_result = await db.execute(
@@ -441,7 +315,6 @@ async def run_workflow_sync(
 
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-<<<<<<< HEAD
 
     # Check workflow access: user must own it or it must be public
     if not workflow.is_public and workflow.user_id != user_id:
@@ -450,18 +323,6 @@ async def run_workflow_sync(
             detail="Not authorized to execute this workflow"
         )
     
-||||||| c16401e
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
-=======
-
->>>>>>> auto-claude/004-consistent-user-id-handling-across-services
     start_time = datetime.now(timezone.utc)
 
     # Create execution record
@@ -524,18 +385,13 @@ async def run_workflow_sync(
 
 
 @router.post("/run-direct", response_model=DirectExecutionResponse)
-async def run_workflow_direct(request: DirectExecutionRequest):
+async def run_workflow_direct(
+    request: DirectExecutionRequest,
+    user: User = Depends(check_execution_rate_limit),
+):
     """
     Execute a workflow directly from JSON without saving to database.
-    
-    This is useful for:
-    - Testing workflows in the Studio before saving
-    - Quick one-off executions
-    - Integration with external systems
-    
-    Supports two execution engines:
-    - default: Custom WorkflowExecutor
-    - langgraph: LangGraph-based engine (if available)
+    Requires authentication and checks rate limits.
     """
     start_time = datetime.now(timezone.utc)
     

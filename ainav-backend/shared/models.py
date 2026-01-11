@@ -1,11 +1,19 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer
+from sqlalchemy import Column, String, Text, UUID, ForeignKey, Boolean, Float, ARRAY, Table, DateTime, Integer, Enum
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
+import enum
 
 Base = declarative_base()
+
+
+class UserTier(str, enum.Enum):
+    """User subscription tier for rate limiting and feature access."""
+    FREE = "free"
+    PRO = "pro"
+    ENTERPRISE = "enterprise"
 
 
 class TimestampMixin:
@@ -31,6 +39,7 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String(255))
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+    user_tier = Column(Enum(UserTier), default=UserTier.FREE, nullable=False)
 
     # OAuth provider IDs
     github_id = Column(String(50), unique=True, index=True, nullable=True)

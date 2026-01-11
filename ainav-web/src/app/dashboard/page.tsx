@@ -9,6 +9,8 @@ import {
   useMyExecutions,
   useMySessions,
 } from "@/hooks/useAgentApi";
+import { useUserUsage } from "@/hooks/useUserApi";
+import { UsageStats } from "@/components/dashboard/UsageStats";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,6 +43,7 @@ export default function DashboardPage() {
     limit: 5,
   });
   const { data: sessions, isLoading: sessionsLoading } = useMySessions();
+  const { data: usageStats, isLoading: usageLoading } = useUserUsage();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -161,6 +164,22 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Usage Stats */}
+      <div className="mb-8">
+        <UsageStats
+          data={usageStats || {
+            limit: 0,
+            used: 0,
+            remaining: 0,
+            reset_at: new Date().toISOString(),
+            reset_at_timestamp: Date.now() / 1000,
+            tier: "free",
+            window_seconds: 86400
+          }}
+          isLoading={usageLoading}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

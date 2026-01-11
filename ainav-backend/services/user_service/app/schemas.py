@@ -48,3 +48,13 @@ class ChangePasswordRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class UsageStatsOut(BaseModel):
+    """User's execution usage statistics for rate limiting."""
+    limit: int = Field(..., description="Maximum executions allowed in the time window")
+    used: int = Field(..., description="Number of executions used in current window")
+    remaining: int = Field(..., description="Remaining executions available")
+    reset_at: str = Field(..., description="ISO timestamp when the rate limit window resets")
+    reset_at_timestamp: int = Field(..., description="Unix timestamp when the window resets")
+    tier: str = Field(..., description="User's subscription tier (free, pro, enterprise)")
+    window_seconds: int = Field(..., description="Duration of the rate limit window in seconds")
