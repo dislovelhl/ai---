@@ -312,3 +312,54 @@ class SubscriptionPlan(Base, TimestampMixin):
 
     # Priority level for execution queue
     priority_level = Column(Integer, default=0)  # 0=normal, 1=high, 2=critical
+
+    # Relationships
+    subscriptions = relationship("UserSubscription", back_populates="plan")
+
+
+class UserSubscription(Base, TimestampMixin):
+    """
+    UserSubscription: Tracks user subscription status, Stripe integration, and billing information.
+    Links users to their active subscription plan and manages payment methods.
+    """
+    __tablename__ = "user_subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Foreign keys
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("subscription_plans.id"), nullable=False)
+
+    # Stripe integration
+    stripe_customer_id = Column(String(255), unique=True, index=True, nullable=True)  # Stripe Customer ID
+    stripe_subscription_id = Column(String(255), unique=True, index=True, nullable=True)  # Stripe Subscription ID
+    stripe_payment_method_id = Column(String(255), nullable=True)  # Stripe Payment Method ID
+
+    # Payment method details
+    payment_method = Column(String(50), nullable=True)  # 'card', 'alipay', 'wechat_pay'
+    payment_method_last4 = Column(String(4), nullable=True)  # Last 4 digits of card or account
+    payment_method_brand = Column(String(50), nullable=True)  # 'visa', 'mastercard', 'alipay', 'wechat'
+
+    # Subscription status
+    status = Column(String(50), default="active", nullable=False, index=True)  # 'active', 'cancelled', 'past_due', 'trialing', 'expired'
+
+    # Billing cycle
+    billing_cycle = Column(String(20), default="monthly")  # 'monthly', 'yearly'
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    # Cancellation tracking
+    cancel_at_period_end = Column(Boolean, default=False)  # Auto-cancel at end of billing period
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
+
+    # Trial tracking
+    trial_start = Column(DateTime(timezone=True), nullable=True)
+    trial_end = Column(DateTime(timezone=True), nullable=True)
+
+    # Metadata
+    metadata = Column(JSON)  # Additional Stripe metadata
+
+    # Relationships
+    user = relationship("User", backref="subscriptions")
+    plan = relationship("SubscriptionPlan", back_populates="subscriptions")
