@@ -284,6 +284,7 @@ async def create_workflow(
 async def update_workflow(
     workflow_id: UUID,
     workflow_data: WorkflowUpdate,
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -291,16 +292,18 @@ async def update_workflow(
     Increments version and records history when graph changes.
     """
     from datetime import datetime
-    
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
+
+    # Verify ownership
+    if workflow.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this workflow")
     
     update_data = workflow_data.model_dump(exclude_unset=True)
     
