@@ -242,20 +242,38 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class SearchHistory(Base, TimestampMixin):
+    """
+    Tracks user search queries for analytics and personalization.
+    """
+    __tablename__ = "search_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # Nullable for anonymous searches
+
+    # Search query details
+    query = Column(String(500), nullable=False, index=True)
+    query_pinyin = Column(String(500), index=True)  # Pinyin representation for Chinese queries
+
+    # Search results
+    result_count = Column(Integer, default=0)
+    clicked_result_id = Column(UUID(as_uuid=True), nullable=True)  # ID of the tool/item clicked from results
