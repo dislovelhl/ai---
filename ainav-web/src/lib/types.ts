@@ -230,6 +230,43 @@ export interface SearchResult {
 }
 
 // =============================================================================
+// FACETED SEARCH TYPES
+// =============================================================================
+
+export interface FacetCounts {
+  pricing_type: Record<string, number>;
+  is_china_accessible: {
+    accessible: number;
+    not_accessible: number;
+  };
+  has_api: {
+    with_api: number;
+    without_api: number;
+  };
+  category_slug: Record<string, number>;
+}
+
+export interface FacetedSearchResponse {
+  hits: Tool[];
+  query: string;
+  processing_time_ms: number;
+  estimated_total_hits: number;
+  facets: FacetCounts;
+  page: number;
+  page_size: number;
+}
+
+export interface SearchFilters {
+  q?: string;
+  pricing_type?: "free" | "freemium" | "paid" | "beta_free" | "open_source";
+  is_china_accessible?: boolean;
+  has_api?: boolean;
+  category?: string;
+  page?: number;
+  page_size?: number;
+}
+
+// =============================================================================
 // AGENT CHAT TYPES
 // =============================================================================
 
