@@ -23,7 +23,7 @@ export function SearchBar() {
   });
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (
         searchRef.current &&
         !searchRef.current.contains(event.target as Node)
@@ -31,9 +31,24 @@ export function SearchBar() {
         setIsOpen(false);
       }
     };
+
+    // Close search when scrolling on mobile (better UX)
+    const handleScroll = () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.addEventListener("touchstart", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [isOpen]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,10 +102,12 @@ export function SearchBar() {
   return (
     <div className="relative group flex-1 max-w-md" ref={searchRef} role="search">
       <form onSubmit={handleSearch} className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
+        <Search className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
         <input
           ref={inputRef}
-          type="text"
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
           role="combobox"
           aria-label="搜索 AI 工具"
           aria-expanded={isExpanded}
@@ -107,10 +124,10 @@ export function SearchBar() {
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="搜索 AI 工具 (例如: ChatGPT, Midjourney)..."
-          className="h-10 w-full pl-10 pr-10 rounded-full bg-secondary/50 border-none focus:ring-2 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all outline-none text-sm placeholder:text-muted-foreground/70"
+          className="h-11 min-h-[44px] w-full pl-10 sm:pl-11 pr-10 sm:pr-11 rounded-full bg-secondary/50 border-none focus:ring-2 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200 ease-out outline-none text-sm sm:text-base placeholder:text-muted-foreground/70"
         />
         {isLoading && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" aria-hidden="true" />
+          <Loader2 className="absolute right-3 sm:right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-primary animate-spin" aria-hidden="true" />
         )}
         {isLoading && (
           <span className="sr-only" role="status" aria-live="polite">
@@ -124,11 +141,11 @@ export function SearchBar() {
           id={listboxId}
           role="listbox"
           aria-label="搜索结果"
-          className="absolute top-full left-0 right-0 mt-2 bg-background border rounded-2xl shadow-2xl overflow-hidden glass z-[60] animate-in fade-in slide-in-from-top-2 duration-200"
+          className="absolute top-full left-0 right-0 mt-2 bg-background border rounded-2xl shadow-2xl overflow-hidden glass z-[60] animate-in fade-in slide-in-from-top-2 duration-200 max-h-[70vh] overflow-y-auto"
         >
           <div className="p-2">
             {!isLoading && results?.length === 0 && (
-              <p className="px-4 py-3 text-sm text-muted-foreground text-center" role="status">
+              <p className="px-4 py-4 text-sm text-muted-foreground text-center" role="status">
                 未找到相关工具
               </p>
             )}
@@ -140,11 +157,11 @@ export function SearchBar() {
                 aria-selected={focusedIndex === index}
                 href={`/tools/${tool.slug}`}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 hover:bg-primary/5 rounded-xl transition-colors group ${
+                className={`flex items-center gap-3 px-3 sm:px-4 py-3 min-h-[44px] hover:bg-primary/5 active:bg-primary/10 rounded-xl transition-all duration-200 ease-out active:scale-[0.98] group ${
                   focusedIndex === index ? "bg-primary/10 ring-2 ring-primary" : ""
                 }`}
               >
-                <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-secondary/80 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {tool.logo_url ? (
                     <img
                       src={tool.logo_url}
@@ -158,10 +175,10 @@ export function SearchBar() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                  <div className="font-medium text-sm sm:text-base truncate group-hover:text-primary transition-colors">
                     {tool.name_zh || tool.name}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate leading-relaxed">
+                  <div className="text-xs sm:text-sm text-muted-foreground truncate leading-relaxed">
                     {tool.description_zh || tool.description}
                   </div>
                 </div>
@@ -172,8 +189,9 @@ export function SearchBar() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full text-xs text-primary hover:bg-primary/10"
+                  className="w-full min-h-[44px] text-xs sm:text-sm text-primary hover:bg-primary/10 active:scale-[0.98] transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                   onClick={handleSearch}
+                  type="button"
                 >
                   查看全部 "{query}" 的结果
                 </Button>

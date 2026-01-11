@@ -23,19 +23,20 @@ export function ScenarioChips() {
   const router = useRouter();
 
   return (
-    <div className="flex flex-wrap justify-center gap-3 mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+    <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-6 sm:mt-8 px-2 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
       {SCENARIOS.map((scenario) => (
         <Button
           key={scenario.id}
           variant="outline"
           size="sm"
-          className="rounded-full h-9 px-4 border-dashed border-border hover:border-solid hover:border-primary/50 hover:bg-primary/5 transition-all group"
+          className="rounded-full min-h-[44px] h-11 px-4 sm:px-5 border-dashed border-border hover:border-solid hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98] transition-all group touch-manipulation"
           onClick={() => router.push(`/tools?scenario=${scenario.id}`)}
+          aria-label={`查看${scenario.label}相关工具`}
         >
           <scenario.icon
-            className={`w-4 h-4 mr-2 ${scenario.color} group-hover:scale-110 transition-transform`}
+            className={`w-4 h-4 sm:w-4.5 sm:h-4.5 mr-1.5 sm:mr-2 ${scenario.color} group-hover:scale-110 transition-transform shrink-0`}
           />
-          <span className="text-muted-foreground group-hover:text-foreground">
+          <span className="text-sm sm:text-base text-muted-foreground group-hover:text-foreground whitespace-nowrap">
             {scenario.label}
           </span>
         </Button>
