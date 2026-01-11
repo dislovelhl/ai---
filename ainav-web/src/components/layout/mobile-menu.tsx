@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/authStore";
@@ -51,9 +51,24 @@ const USER_MENU_ITEMS = [
 
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const firstNavItemRef = useRef<HTMLButtonElement>(null);
+
+  // Trigger stagger animation when menu opens
+  useEffect(() => {
+    if (open) {
+      setIsAnimating(true);
+      // Focus first nav item for keyboard accessibility
+      setTimeout(() => {
+        firstNavItemRef.current?.focus();
+      }, 100);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [open]);
 
   const handleLogout = () => {
     logout();
@@ -75,6 +90,16 @@ export function MobileMenu() {
     router.push(href);
   };
 
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    callback: () => void
+  ) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      callback();
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -88,11 +113,15 @@ export function MobileMenu() {
           <span className="sr-only">打开菜单</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-[300px] sm:w-[350px] p-0">
-        <SheetHeader className="p-4 border-b">
+      <SheetContent
+        side="right"
+        className="w-[300px] sm:w-[350px] p-0"
+        aria-label="主菜单"
+      >
+        <SheetHeader className="p-4 pb-3 border-b">
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
                 <span className="text-primary-foreground font-bold">A</span>
               </div>
               <span>
@@ -125,17 +154,31 @@ export function MobileMenu() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  className="flex-1 h-11 min-h-[44px]"
+                  className={cn(
+                    "flex-1 h-11 min-h-[44px]",
+                    "transition-all duration-200 ease-out",
+                    "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                    "active:scale-[0.98]"
+                  )}
                   onClick={() => handleNavigation("/login")}
+                  onKeyDown={(e) => handleKeyDown(e, () => handleNavigation("/login"))}
+                  aria-label="登录"
                 >
-                  <LogIn className="mr-2 h-4 w-4" />
+                  <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
                   登录
                 </Button>
                 <Button
-                  className="flex-1 h-11 min-h-[44px]"
+                  className={cn(
+                    "flex-1 h-11 min-h-[44px]",
+                    "transition-all duration-200 ease-out",
+                    "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                    "active:scale-[0.98]"
+                  )}
                   onClick={() => handleNavigation("/register")}
+                  onKeyDown={(e) => handleKeyDown(e, () => handleNavigation("/register"))}
+                  aria-label="注册"
                 >
-                  <UserPlus className="mr-2 h-4 w-4" />
+                  <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
                   注册
                 </Button>
               </div>
@@ -143,28 +186,46 @@ export function MobileMenu() {
           )}
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-4">
+          <nav
+            className="flex-1 overflow-y-auto py-4"
+            aria-label="主导航"
+            role="navigation"
+          >
             <div className="px-2 space-y-1">
-              {NAV_ITEMS.map((item) => {
+              {NAV_ITEMS.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
 
                 return (
                   <button
                     key={item.href}
+                    ref={index === 0 ? firstNavItemRef : null}
                     onClick={() => handleNavigation(item.href)}
+                    onKeyDown={(e) => handleKeyDown(e, () => handleNavigation(item.href))}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors",
+                      "w-full flex items-center gap-3 px-4 py-3.5 rounded-lg text-left min-h-[44px]",
+                      "transition-all duration-200 ease-out",
+                      "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                      "active:scale-[0.98]",
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted",
-                      item.highlight && !isActive && "text-primary font-medium"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "hover:bg-muted active:bg-muted/80",
+                      item.highlight && !isActive && "text-primary font-medium",
+                      // Stagger animation
+                      isAnimating && "animate-in slide-in-from-right fade-in",
+                      isAnimating && `duration-300 delay-${index * 50}`
                     )}
+                    style={
+                      isAnimating
+                        ? { animationDelay: `${index * 50}ms` }
+                        : undefined
+                    }
+                    aria-current={isActive ? "page" : undefined}
                   >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.label}</span>
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span className="flex-1">{item.label}</span>
                     {item.highlight && (
-                      <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                      <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded-full shrink-0">
                         热门
                       </span>
                     )}
@@ -181,23 +242,38 @@ export function MobileMenu() {
                   <p className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     个人中心
                   </p>
-                  {USER_MENU_ITEMS.map((item) => {
+                  {USER_MENU_ITEMS.map((item, index) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href;
+                    // Continue stagger animation from nav items
+                    const delayIndex = NAV_ITEMS.length + index;
 
                     return (
                       <button
                         key={item.href}
                         onClick={() => handleNavigation(item.href)}
+                        onKeyDown={(e) => handleKeyDown(e, () => handleNavigation(item.href))}
                         className={cn(
-                          "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors",
+                          "w-full flex items-center gap-3 px-4 py-3.5 rounded-lg text-left min-h-[44px]",
+                          "transition-all duration-200 ease-out",
+                          "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                          "active:scale-[0.98]",
                           isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "hover:bg-muted"
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "hover:bg-muted active:bg-muted/80",
+                          // Stagger animation
+                          isAnimating && "animate-in slide-in-from-right fade-in",
+                          isAnimating && `duration-300 delay-${delayIndex * 50}`
                         )}
+                        style={
+                          isAnimating
+                            ? { animationDelay: `${delayIndex * 50}ms` }
+                            : undefined
+                        }
+                        aria-current={isActive ? "page" : undefined}
                       >
-                        <Icon className="h-5 w-5" />
-                        <span>{item.label}</span>
+                        <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <span className="flex-1">{item.label}</span>
                       </button>
                     );
                   })}
@@ -211,10 +287,17 @@ export function MobileMenu() {
             <div className="p-4 border-t">
               <Button
                 variant="ghost"
-                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 h-11 min-h-[44px]"
+                className={cn(
+                  "w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 h-11 min-h-[44px]",
+                  "transition-all duration-200 ease-out",
+                  "focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2",
+                  "active:scale-[0.98]"
+                )}
                 onClick={handleLogout}
+                onKeyDown={(e) => handleKeyDown(e, handleLogout)}
+                aria-label="退出登录"
               >
-                <LogOut className="mr-2 h-5 w-5" />
+                <LogOut className="mr-2 h-5 w-5" aria-hidden="true" />
                 退出登录
               </Button>
             </div>
