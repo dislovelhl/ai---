@@ -106,3 +106,70 @@ def validate_token(token: str) -> bool:
         return True
     except HTTPException:
         return False
+
+
+async def get_current_user(
+    db: AsyncSession = Depends(get_db),
+    token: str = Depends(oauth2_scheme)
+):
+    """
+    Dependency to get the current authenticated user.
+
+    Extracts user ID from JWT token, fetches the user from database,
+    and returns the full User object. Used for authenticated endpoints
+    that need access to user data.
+
+    Args:
+        db: Database session dependency
+        token: JWT token from Authorization header
+
+    Returns:
+        User object from database
+
+    Raises:
+        HTTPException: If token is invalid or user not found (401)
+
+    Example:
+        @app.get("/me")
+        async def get_profile(user: User = Depends(get_current_user)):
+            return {"username": user.username, "email": user.email}
+    """
+    from sqlalchemy import select
+    from .models import User
+    from uuid import UUID
+
+    # Extract user_id from token
+    user_id_str = extract_user_id_from_token(token)
+
+    # Convert to UUID
+    try:
+        user_id = UUID(user_id_str)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Invalid UUID format in token: {user_id_str}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Fetch user from database
+    try:
+        stmt = select(User).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Database error while fetching user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+
+    if user is None:
+        logger.warning(f"User not found for id: {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
