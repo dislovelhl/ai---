@@ -21,6 +21,10 @@ from ..schemas import (
     WorkflowSummary,
     PaginatedWorkflowsResponse,
     WorkflowRevert,
+    VersionComparison,
+    VersionSnapshot,
+    NodeDiff,
+    EdgeDiff,
 )
 
 router = APIRouter()
@@ -534,3 +538,131 @@ async def revert_workflow_version(
     await db.refresh(workflow)
 
     return WorkflowResponse.model_validate(workflow)
+
+
+@router.get("/{workflow_id}/versions/compare", response_model=VersionComparison)
+async def compare_workflow_versions(
+    workflow_id: UUID,
+    v1: int = Query(..., ge=1, description="First version number to compare"),
+    v2: int = Query(..., ge=1, description="Second version number to compare"),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Compare two versions of a workflow.
+    Returns both version snapshots with detailed differences in nodes and edges.
+    """
+    result = await db.execute(
+        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # TODO: Check permissions
+
+    version_history = workflow.version_history or []
+
+    # Find both version snapshots
+    v1_snapshot = None
+    v2_snapshot = None
+
+    for entry in version_history:
+        if entry.get("version") == v1:
+            v1_snapshot = entry
+        if entry.get("version") == v2:
+            v2_snapshot = entry
+
+    if not v1_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {v1} not found in workflow history"
+        )
+
+    if not v2_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {v2} not found in workflow history"
+        )
+
+    # Extract nodes and edges from both versions
+    v1_graph = v1_snapshot.get("graph_json", {})
+    v2_graph = v2_snapshot.get("graph_json", {})
+
+    v1_nodes = {node["id"]: node for node in v1_graph.get("nodes", [])}
+    v2_nodes = {node["id"]: node for node in v2_graph.get("nodes", [])}
+
+    v1_edges = {edge["id"]: edge for edge in v1_graph.get("edges", [])}
+    v2_edges = {edge["id"]: edge for edge in v2_graph.get("edges", [])}
+
+    # Compare nodes
+    nodes_added = []
+    nodes_removed = []
+    nodes_modified = []
+
+    # Find added and modified nodes
+    for node_id, node_data in v2_nodes.items():
+        if node_id not in v1_nodes:
+            nodes_added.append(NodeDiff(
+                node_id=node_id,
+                change_type="added",
+                new_data=node_data
+            ))
+        elif node_data != v1_nodes[node_id]:
+            nodes_modified.append(NodeDiff(
+                node_id=node_id,
+                change_type="modified",
+                old_data=v1_nodes[node_id],
+                new_data=node_data
+            ))
+
+    # Find removed nodes
+    for node_id, node_data in v1_nodes.items():
+        if node_id not in v2_nodes:
+            nodes_removed.append(NodeDiff(
+                node_id=node_id,
+                change_type="removed",
+                old_data=node_data
+            ))
+
+    # Compare edges
+    edges_added = []
+    edges_removed = []
+    edges_modified = []
+
+    # Find added and modified edges
+    for edge_id, edge_data in v2_edges.items():
+        if edge_id not in v1_edges:
+            edges_added.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="added",
+                new_data=edge_data
+            ))
+        elif edge_data != v1_edges[edge_id]:
+            edges_modified.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="modified",
+                old_data=v1_edges[edge_id],
+                new_data=edge_data
+            ))
+
+    # Find removed edges
+    for edge_id, edge_data in v1_edges.items():
+        if edge_id not in v2_edges:
+            edges_removed.append(EdgeDiff(
+                edge_id=edge_id,
+                change_type="removed",
+                old_data=edge_data
+            ))
+
+    return VersionComparison(
+        workflow_id=str(workflow_id),
+        version1=VersionSnapshot(**v1_snapshot),
+        version2=VersionSnapshot(**v2_snapshot),
+        nodes_added=nodes_added,
+        nodes_removed=nodes_removed,
+        nodes_modified=nodes_modified,
+        edges_added=edges_added,
+        edges_removed=edges_removed,
+        edges_modified=edges_modified,
+    )

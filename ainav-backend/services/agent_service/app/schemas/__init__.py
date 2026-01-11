@@ -169,6 +169,44 @@ class WorkflowRevert(BaseModel):
     target_version: int = Field(..., ge=1, description="Version number to revert to")
 
 
+class VersionSnapshot(BaseModel):
+    """Version snapshot with metadata."""
+    version: int
+    timestamp: str
+    notes: str
+    graph_json: dict[str, Any]
+    user_id: str
+
+
+class NodeDiff(BaseModel):
+    """Node difference information."""
+    node_id: str
+    change_type: str  # 'added', 'removed', 'modified'
+    old_data: Optional[dict[str, Any]] = None
+    new_data: Optional[dict[str, Any]] = None
+
+
+class EdgeDiff(BaseModel):
+    """Edge difference information."""
+    edge_id: str
+    change_type: str  # 'added', 'removed', 'modified'
+    old_data: Optional[dict[str, Any]] = None
+    new_data: Optional[dict[str, Any]] = None
+
+
+class VersionComparison(BaseModel):
+    """Comparison between two workflow versions."""
+    workflow_id: str
+    version1: VersionSnapshot
+    version2: VersionSnapshot
+    nodes_added: list[NodeDiff]
+    nodes_removed: list[NodeDiff]
+    nodes_modified: list[NodeDiff]
+    edges_added: list[EdgeDiff]
+    edges_removed: list[EdgeDiff]
+    edges_modified: list[EdgeDiff]
+
+
 # =============================================================================
 # EXECUTION SCHEMAS
 # =============================================================================
