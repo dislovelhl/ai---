@@ -1,0 +1,111 @@
+# Build Progress - User Activity Dashboard
+
+## 2026-01-10 - Implementation Plan Created
+
+### Planning Phase Complete ✅
+
+Created comprehensive implementation plan with 4 phases and 26 subtasks:
+
+**Phase 1: Backend API Development (7 subtasks)**
+- Dashboard router and schemas
+- Recent activity endpoint
+- Saved/starred items endpoints
+- Recommendation algorithm enhancement
+- Learning progress tracking
+- Router registration
+- Backend tests
+
+**Phase 2: Frontend Components Development (7 subtasks)**
+- API client functions
+- Custom React hooks
+- ActivityFeed component
+- SavedItems component
+- Recommendations component
+- LearningProgress component
+- QuickActions component
+
+**Phase 3: Dashboard Integration & Enhancement (5 subtasks)**
+- Update dashboard page layout
+- Loading and error states
+- Star/unstar functionality
+- Responsive design
+- Data refresh mechanism
+
+**Phase 4: Testing & Documentation (6 subtasks)**
+- Frontend component tests
+- E2E tests
+- Performance optimization
+- API documentation
+- User guide
+- Final QA
+
+### Key Design Decisions
+
+1. **Data Model**: Use existing UserInteraction model for tracking starred items (action='starred') rather than creating a separate table
+2. **Architecture**: Add new dashboard router to user_service alongside existing personalization router
+3. **Frontend**: Enhance existing dashboard page at app/dashboard/page.tsx with new components
+4. **Recommendations**: Build on existing /personalization/recommendations endpoint with collaborative filtering
+5. **Learning Progress**: Track via UserInteraction with item_type='roadmap' and 'prompt'
+
+### Next Steps
+
+Ready to begin implementation starting with Phase 1, Subtask 1.1 (Create dashboard router and schemas)
+
+---
+
+## 2026-01-11 - Phase 1 Implementation Started
+
+### Subtask 1.1: Create dashboard router and schemas ✅ COMPLETED
+
+**What was done:**
+- Created `ainav-backend/services/user_service/app/routers/dashboard.py` with comprehensive Pydantic schemas
+- Implemented all required response models:
+  - **Activity Feed**: `ActivityItemResponse`, `ActivityFeedResponse` (with pagination)
+  - **Saved Items**: `SavedToolResponse`, `SavedWorkflowResponse`, `SavedItemsResponse`
+  - **Recommendations**: `RecommendationItemResponse`, `RecommendationsResponse` (with reasoning)
+  - **Learning Progress**: `LearningPathProgress`, `LearningProgressResponse`
+  - **Executions**: `WorkflowExecutionSummary`, `RecentExecutionsResponse`
+  - **Stats**: `DashboardStatsResponse`
+  - **Star Management**: `ToggleStarRequest`, `ToggleStarResponse`
+- Router configured with `/dashboard` prefix and `dashboard` tag
+- All schemas follow project conventions (from_attributes = True, Chinese language support with _zh fields)
+- Implemented initial `/stats` endpoint as a working example
+
+**Files modified:**
+- `ainav-backend/services/user_service/app/routers/dashboard.py` (created)
+
+**Next up:** Subtask 1.2 - Implement recent activity endpoint
+
+---
+
+### Subtask 1.2: Implement recent activity endpoint ✅ COMPLETED
+
+**What was done:**
+- Implemented `GET /v1/dashboard/activity` endpoint in `dashboard.py`
+- Features:
+  - Pagination support with `page` and `page_size` query parameters
+  - Returns recent user interactions ordered by timestamp (most recent first)
+  - Batch fetches related item details (Tool and AgentWorkflow) to include item names
+  - Supports multiple item types: 'tool', 'agent' (with 'roadmap' planned for future)
+  - Efficient N+1 query prevention through batch loading
+  - Returns paginated response with total count, items, page, and page_size
+- Response includes:
+  - Interaction ID, item type, item ID, action type (view, click, run, like, etc.)
+  - Item name and Chinese translation (name_zh) from related tables
+  - Timestamp and optional metadata
+- Registered dashboard router in `main.py` with `/v1` prefix (note: this partially completes subtask 1.6)
+- All code follows existing patterns from the codebase
+- Syntax validation passed
+
+**Implementation approach:**
+1. Query UserInteraction records with pagination
+2. Collect item IDs grouped by type
+3. Batch fetch Tool and AgentWorkflow records
+4. Build activity items by joining interaction data with item details
+5. Return paginated response following ActivityFeedResponse schema
+
+**Files modified:**
+- `ainav-backend/services/user_service/app/routers/dashboard.py` (added endpoint)
+- `ainav-backend/services/user_service/app/main.py` (registered dashboard router)
+
+**Next up:** Subtask 1.3 - Add saved/starred items endpoints
