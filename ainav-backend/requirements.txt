@@ -34,3 +34,7 @@ sse-starlette>=2.0.0
 
 # Numerical computation (used by cache_service for cosine similarity)
 numpy>=1.26.0
+
+# Scheduling and timezone support
+croniter>=1.4.0
+pytz>=2024.1

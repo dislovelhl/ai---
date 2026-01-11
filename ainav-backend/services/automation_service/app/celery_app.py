@@ -6,7 +6,10 @@ celery_app = Celery(
     "automation_tasks",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["services.automation_service.app.workers.tasks"]
+    include=[
+        "services.automation_service.app.workers.tasks",
+        "services.automation_service.app.workers.workflow_scheduler"
+    ]
 )
 
 @worker_process_init.connect
@@ -48,5 +51,9 @@ celery_app.conf.beat_schedule = {
     "mine-arxiv-daily": {
         "task": "mine_arxiv_papers_daily",
         "schedule": crontab(hour=2, minute=0),
+    },
+    "execute-scheduled-workflows": {
+        "task": "execute_scheduled_workflows",
+        "schedule": crontab(minute="*"),  # Run every minute
     },
 }
