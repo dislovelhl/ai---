@@ -83,6 +83,9 @@ class Tool(Base, TimestampMixin):
     manual_override_set_by = Column(String(255), nullable=True)
     manual_override_set_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Accessibility check tracking
+    last_accessibility_check = Column(DateTime(timezone=True), nullable=True)
+
     avg_rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
     github_stars = Column(Integer, default=0)
