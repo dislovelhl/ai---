@@ -189,3 +189,32 @@ class LearningPathRepository(BaseRepository[LearningPath]):
         ).where(self.model.is_published == True).offset(skip).limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
+
+class LearningPathModuleRepository(BaseRepository[LearningPathModule]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(LearningPathModule, session)
+
+    async def get_by_learning_path_id(self, learning_path_id: any) -> List[LearningPathModule]:
+        """Get all modules for a specific learning path, ordered by order field"""
+        from sqlalchemy import asc
+        query = select(self.model).where(
+            self.model.learning_path_id == learning_path_id
+        ).order_by(asc(self.model.order))
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
+    async def reorder_modules(self, module_orders: List[dict]) -> bool:
+        """
+        Update the order of multiple modules.
+        module_orders: List of dicts with 'id' and 'order' keys
+        Example: [{"id": "uuid1", "order": 1}, {"id": "uuid2", "order": 2}]
+        """
+        try:
+            for item in module_orders:
+                module_id = item.get("id")
+                new_order = item.get("order")
+                if module_id and new_order is not None:
+                    await self.update(module_id, order=new_order)
+            return True
+        except Exception:
+            return False
