@@ -90,6 +90,28 @@ class Tool(Base, TimestampMixin):
     skills = relationship("Skill", back_populates="tool", cascade="all, delete-orphan")
 
 
+class ToolComparison(Base, TimestampMixin):
+    """
+    ToolComparison: Stores user-created tool comparisons for side-by-side evaluation.
+    Allows users to compare 2-4 tools and share comparisons via unique links.
+    """
+    __tablename__ = "tool_comparisons"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Comparison metadata
+    title = Column(String(255), nullable=True)  # Optional user-defined title
+    tool_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=False)  # Array of 2-4 tool UUIDs
+
+    # Sharing configuration
+    share_token = Column(String(100), unique=True, index=True, nullable=False)  # Unique token for public sharing
+    is_public = Column(Boolean, default=False)  # Whether comparison is publicly accessible
+
+    # Relationship
+    user = relationship("User")
+
+
 # =============================================================================
 # AGENTIC PLATFORM MODELS
 # =============================================================================
