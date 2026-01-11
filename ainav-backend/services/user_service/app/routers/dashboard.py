@@ -349,9 +349,187 @@ async def get_recent_activity(
     )
 
 
+@router.get("/saved", response_model=SavedItemsResponse)
+async def get_saved_items(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all saved/starred tools and workflows for the current user.
+
+    Returns tools and workflows that the user has starred, grouped by type.
+    """
+    # Query all starred interactions for this user
+    starred_result = await db.execute(
+        select(UserInteraction)
+        .where(
+            and_(
+                UserInteraction.user_id == current_user.id,
+                UserInteraction.action == 'star'
+            )
+        )
+        .order_by(desc(UserInteraction.created_at))
+    )
+    starred_interactions = starred_result.scalars().all()
+
+    # Separate tool IDs and workflow IDs
+    tool_ids = [
+        interaction.item_id
+        for interaction in starred_interactions
+        if interaction.item_type == 'tool'
+    ]
+    workflow_ids = [
+        interaction.item_id
+        for interaction in starred_interactions
+        if interaction.item_type == 'agent'
+    ]
+
+    # Create timestamp maps for starred_at dates
+    tool_starred_at = {
+        interaction.item_id: interaction.created_at
+        for interaction in starred_interactions
+        if interaction.item_type == 'tool'
+    }
+    workflow_starred_at = {
+        interaction.item_id: interaction.created_at
+        for interaction in starred_interactions
+        if interaction.item_type == 'agent'
+    }
+
+    # Fetch tools
+    saved_tools = []
+    if tool_ids:
+        tools_result = await db.execute(
+            select(Tool)
+            .where(Tool.id.in_(tool_ids))
+        )
+        tools = tools_result.scalars().all()
+
+        for tool in tools:
+            saved_tools.append(SavedToolResponse(
+                id=tool.id,
+                name=tool.name,
+                name_zh=tool.name_zh,
+                description=tool.description,
+                description_zh=tool.description_zh,
+                slug=tool.slug,
+                url=tool.url,
+                logo_url=tool.logo_url,
+                pricing_type=tool.pricing_type,
+                is_china_accessible=tool.is_china_accessible,
+                requires_vpn=tool.requires_vpn,
+                starred_at=tool_starred_at[tool.id]
+            ))
+
+    # Fetch workflows
+    saved_workflows = []
+    if workflow_ids:
+        workflows_result = await db.execute(
+            select(AgentWorkflow)
+            .where(AgentWorkflow.id.in_(workflow_ids))
+        )
+        workflows = workflows_result.scalars().all()
+
+        for workflow in workflows:
+            saved_workflows.append(SavedWorkflowResponse(
+                id=workflow.id,
+                name=workflow.name,
+                name_zh=workflow.name_zh,
+                description=workflow.description,
+                description_zh=workflow.description_zh,
+                slug=workflow.slug,
+                icon=workflow.icon,
+                is_public=workflow.is_public,
+                starred_at=workflow_starred_at[workflow.id]
+            ))
+
+    return SavedItemsResponse(
+        tools=saved_tools,
+        workflows=saved_workflows,
+        total_count=len(saved_tools) + len(saved_workflows)
+    )
+
+
+@router.post("/star", response_model=ToggleStarResponse)
+async def toggle_star(
+    request: ToggleStarRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Toggle star status for a tool or workflow.
+
+    If the item is not starred, create a star interaction.
+    If the item is already starred, remove the star interaction.
+    """
+    # Check if item is already starred
+    existing_star_result = await db.execute(
+        select(UserInteraction)
+        .where(
+            and_(
+                UserInteraction.user_id == current_user.id,
+                UserInteraction.item_type == request.item_type,
+                UserInteraction.item_id == request.item_id,
+                UserInteraction.action == 'star'
+            )
+        )
+    )
+    existing_star = existing_star_result.scalar_one_or_none()
+
+    if existing_star:
+        # Unstar: Remove the interaction
+        await db.delete(existing_star)
+        await db.commit()
+
+        # Update star count on the item if it's a workflow
+        if request.item_type == 'agent':
+            workflow_result = await db.execute(
+                select(AgentWorkflow)
+                .where(AgentWorkflow.id == request.item_id)
+            )
+            workflow = workflow_result.scalar_one_or_none()
+            if workflow and workflow.star_count > 0:
+                workflow.star_count -= 1
+                await db.commit()
+
+        return ToggleStarResponse(
+            success=True,
+            starred=False,
+            item_type=request.item_type,
+            item_id=request.item_id
+        )
+    else:
+        # Star: Create new interaction
+        new_star = UserInteraction(
+            user_id=current_user.id,
+            item_type=request.item_type,
+            item_id=request.item_id,
+            action='star',
+            weight=1.0
+        )
+        db.add(new_star)
+        await db.commit()
+
+        # Update star count on the item if it's a workflow
+        if request.item_type == 'agent':
+            workflow_result = await db.execute(
+                select(AgentWorkflow)
+                .where(AgentWorkflow.id == request.item_id)
+            )
+            workflow = workflow_result.scalar_one_or_none()
+            if workflow:
+                workflow.star_count += 1
+                await db.commit()
+
+        return ToggleStarResponse(
+            success=True,
+            starred=True,
+            item_type=request.item_type,
+            item_id=request.item_id
+        )
+
+
 # Note: The following endpoints will be implemented in subsequent subtasks:
-# - GET /saved - Get saved/starred items (subtask 1.3)
-# - POST /star - Toggle star status (subtask 1.3)
 # - GET /recommendations - Get personalized recommendations (subtask 1.4)
 # - GET /learning-progress - Get learning progress (subtask 1.5)
 # - GET /executions - Get recent workflow executions
