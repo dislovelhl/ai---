@@ -1,0 +1,337 @@
+{
+  "feature": "User Activity Dashboard",
+  "description": "Personal dashboard showing recent activity, workflow execution history, saved tools, learning progress, and personalized recommendations",
+  "created_at": "2026-01-11T04:19:30.481Z",
+  "updated_at": "2026-01-11T15:44:15.668Z",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "phases": [
+    {
+      "phase_id": "phase_1",
+      "phase_name": "Backend API Development",
+      "description": "Create dashboard API endpoints in user_service for activity, saved items, recommendations, and learning progress",
+      "subtasks": [
+        {
+          "subtask_id": "1.1",
+          "title": "Create dashboard router and schemas",
+          "description": "Add a new dashboard.py router in user_service with Pydantic schemas for dashboard responses (activity feed, saved items, recommendations, learning progress)",
+          "status": "completed",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/dashboard.py"
+          ],
+          "notes": "Dashboard router created with comprehensive Pydantic schemas for activity feed (ActivityItemResponse, ActivityFeedResponse), saved items (SavedToolResponse, SavedWorkflowResponse, SavedItemsResponse), recommendations (RecommendationItemResponse, RecommendationsResponse), learning progress (LearningPathProgress, LearningProgressResponse), and additional schemas for executions, stats, and star toggling. Router configured with /dashboard prefix and dashboard tag. Initial /stats endpoint implemented."
+        },
+        {
+          "subtask_id": "1.2",
+          "title": "Implement recent activity endpoint",
+          "description": "Create GET /v1/dashboard/activity endpoint that aggregates UserInteraction data to show recent user activities (views, clicks, runs, likes) with pagination",
+          "status": "completed",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/dashboard.py",
+            "ainav-backend/services/user_service/app/main.py"
+          ],
+          "notes": "Implemented GET /v1/dashboard/activity endpoint with pagination, batch loading of item details (Tool and AgentWorkflow), and efficient query optimization. Endpoint returns ActivityFeedResponse with recent user interactions including item names. Dashboard router registered in main.py."
+        },
+        {
+          "subtask_id": "1.3",
+          "title": "Add saved/starred items endpoints",
+          "description": "Create endpoints to get and toggle starred tools and workflows. Add a 'starred' action type to UserInteraction model tracking or create a separate starred_items table",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/dashboard.py",
+            "ainav-backend/shared/models.py"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "1.4",
+          "title": "Build recommendation algorithm",
+          "description": "Enhance the existing /personalization/recommendations endpoint with collaborative filtering based on UserInteraction history. Recommend tools/workflows from similar users or categories",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/personalization.py"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "1.5",
+          "title": "Implement learning progress tracking",
+          "description": "Create GET /v1/dashboard/learning-progress endpoint that tracks completion of learning paths, roadmaps, and prompts. May need to add a LearningProgress model or use UserInteraction",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/dashboard.py",
+            "ainav-backend/shared/models.py"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "1.6",
+          "title": "Register dashboard router in main.py",
+          "description": "Import and register the dashboard router in user_service main.py with /v1/dashboard prefix",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/app/main.py"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "1.7",
+          "title": "Add backend tests for dashboard endpoints",
+          "description": "Write pytest tests for all dashboard endpoints: activity, saved items, recommendations, learning progress",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/tests/test_dashboard.py"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "phase_2",
+      "phase_name": "Frontend Components Development",
+      "description": "Create React components for activity feed, saved items, recommendations, and learning progress visualization",
+      "subtasks": [
+        {
+          "subtask_id": "2.1",
+          "title": "Create API client functions",
+          "description": "Add API client functions in lib/api.ts for fetching dashboard data: getRecentActivity, getSavedItems, getRecommendations, getLearningProgress, toggleStarred",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/lib/api.ts"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.2",
+          "title": "Create custom hooks for dashboard data",
+          "description": "Add React Query hooks in hooks/useDashboard.ts: useRecentActivity, useSavedItems, useRecommendations, useLearningProgress, useToggleStar",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/hooks/useDashboard.ts"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.3",
+          "title": "Build ActivityFeed component",
+          "description": "Create components/dashboard/ActivityFeed.tsx to display recent user interactions with icons, timestamps, and item links. Show different action types (view, click, run, like, fork)",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/ActivityFeed.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.4",
+          "title": "Build SavedItems component",
+          "description": "Create components/dashboard/SavedItems.tsx to list saved/starred tools and workflows with unstar capability. Group by type (tools vs workflows)",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/SavedItems.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.5",
+          "title": "Build Recommendations component",
+          "description": "Create components/dashboard/Recommendations.tsx to show personalized tool/workflow recommendations with reasons (e.g., 'Based on your interest in...')",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/Recommendations.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.6",
+          "title": "Build LearningProgress component",
+          "description": "Create components/dashboard/LearningProgress.tsx with progress bars/charts showing completion of learning paths, roadmaps. Use recharts or similar for visualization",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/LearningProgress.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "2.7",
+          "title": "Create QuickActions component",
+          "description": "Create components/dashboard/QuickActions.tsx with action buttons: Create Workflow, Browse Tools, View All Executions, Explore Learning Paths",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/QuickActions.tsx"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "phase_3",
+      "phase_name": "Dashboard Integration & Enhancement",
+      "description": "Integrate new components into the existing dashboard page and add polish",
+      "subtasks": [
+        {
+          "subtask_id": "3.1",
+          "title": "Update dashboard page layout",
+          "description": "Enhance app/dashboard/page.tsx to include new sections: Activity Feed (left column), Saved Items + Recommendations (right column), Learning Progress (bottom), Quick Actions (top)",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/app/dashboard/page.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.2",
+          "title": "Add loading and error states",
+          "description": "Implement proper loading skeletons and error boundaries for all dashboard components. Use Suspense boundaries where appropriate",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/app/dashboard/page.tsx",
+            "ainav-web/src/components/dashboard/*.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.3",
+          "title": "Implement star/unstar functionality",
+          "description": "Add star icons to tool and workflow cards throughout the app with toggle functionality that updates UserInteraction",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/tools/ToolCard.tsx",
+            "ainav-web/src/app/dashboard/page.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.4",
+          "title": "Add responsive design improvements",
+          "description": "Ensure all dashboard components are mobile-responsive with proper breakpoints and touch-friendly interactions",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/app/dashboard/page.tsx",
+            "ainav-web/src/components/dashboard/*.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "3.5",
+          "title": "Implement data refresh mechanism",
+          "description": "Add manual refresh button and automatic polling (every 30s) for real-time updates on executions and activity",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/app/dashboard/page.tsx",
+            "ainav-web/src/hooks/useDashboard.ts"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "phase_4",
+      "phase_name": "Testing & Documentation",
+      "description": "Comprehensive testing, performance optimization, and documentation updates",
+      "subtasks": [
+        {
+          "subtask_id": "4.1",
+          "title": "Write frontend component tests",
+          "description": "Add unit tests for dashboard components using React Testing Library and Jest",
+          "status": "pending",
+          "files": [
+            "ainav-web/src/components/dashboard/__tests__/*.test.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.2",
+          "title": "Add E2E tests for dashboard flow",
+          "description": "Create Playwright/Cypress tests for complete user flows: viewing dashboard, starring items, checking recommendations",
+          "status": "pending",
+          "files": [
+            "ainav-web/e2e/dashboard.spec.ts"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.3",
+          "title": "Performance optimization",
+          "description": "Optimize dashboard queries with proper indexing, implement data caching, lazy loading for heavy components",
+          "status": "pending",
+          "files": [
+            "ainav-backend/services/user_service/app/routers/dashboard.py",
+            "ainav-web/src/app/dashboard/page.tsx"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.4",
+          "title": "Update API documentation",
+          "description": "Document all new dashboard endpoints in OpenAPI specs with example requests/responses",
+          "status": "pending",
+          "files": [
+            "docs/api/dashboard-endpoints.md"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.5",
+          "title": "Create user guide",
+          "description": "Write user-facing documentation explaining dashboard features in both English and Chinese",
+          "status": "pending",
+          "files": [
+            "docs/user-guide/dashboard.md"
+          ],
+          "notes": ""
+        },
+        {
+          "subtask_id": "4.6",
+          "title": "Final QA and acceptance testing",
+          "description": "Verify all acceptance criteria from spec: workflow executions shown, starred items listed, recommendations working, learning progress visualized, quick actions functional",
+          "status": "pending",
+          "files": [],
+          "notes": ""
+        }
+      ]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "criteria": "Dashboard shows recent workflow executions with status",
+      "status": "pending",
+      "verified_by": ""
+    },
+    {
+      "criteria": "Saved/starred tools and workflows listed",
+      "status": "pending",
+      "verified_by": ""
+    },
+    {
+      "criteria": "Personalized tool recommendations based on history",
+      "status": "pending",
+      "verified_by": ""
+    },
+    {
+      "criteria": "Learning progress visualization",
+      "status": "pending",
+      "verified_by": ""
+    },
+    {
+      "criteria": "Quick actions: create workflow, browse tools, view executions",
+      "status": "pending",
+      "verified_by": ""
+    }
+  ],
+  "qa": {
+    "status": "not_started",
+    "tests_passed": "",
+    "issues": ""
+  },
+  "metadata": {
+    "estimated_hours": 24,
+    "priority": "high",
+    "dependencies": [
+      "User authentication system",
+      "Agent workflow system",
+      "UserInteraction model",
+      "Content service for tools/categories"
+    ]
+  },
+  "recoveryNote": "Task recovered from stuck state at 2026-01-11T15:42:22.698Z"
+}
