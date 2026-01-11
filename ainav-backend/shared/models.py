@@ -396,7 +396,15 @@ class Skill(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     usage_count = Column(Integer, default=0)
     avg_latency_ms = Column(Float, default=0.0)
-    
+
+    # Documentation fields
+    rate_limit = Column(JSON)  # {"requests_per_minute": 60, "requests_per_day": 1000}
+    pricing_tier = Column(String(50))  # 'free', 'pro', 'enterprise'
+    pricing_details = Column(JSON)  # {"cost_per_request": 0.001, "currency": "USD", "free_tier_limit": 100}
+    code_examples = Column(JSON)  # {"python": "...", "javascript": "..."}
+    sample_request = Column(JSON)  # Example request payload
+    sample_response = Column(JSON)  # Example response payload
+
     # Relationship
     tool = relationship("Tool", back_populates="skills")
 
