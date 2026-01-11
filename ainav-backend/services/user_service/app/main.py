@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from shared.config import settings
-from .routers import auth, users, personalization, oauth
+from .routers import auth, users, personalization, oauth, admin
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ app.include_router(auth.router, prefix="/v1")
 app.include_router(users.router, prefix="/v1")
 app.include_router(personalization.router, prefix="/v1/personalization")
 app.include_router(oauth.router, prefix="/v1")
+app.include_router(admin.router, prefix="/v1")
 
 @app.get("/health")
 async def health_check():
