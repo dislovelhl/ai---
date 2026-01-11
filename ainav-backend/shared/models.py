@@ -242,20 +242,51 @@ class UserInteraction(Base, TimestampMixin):
     Tracks user interactions with tools and agents for personalization.
     """
     __tablename__ = "user_interactions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    
+
     # Target item
     item_type = Column(String(50), nullable=False)  # 'tool', 'agent', 'roadmap'
     item_id = Column(UUID(as_uuid=True), nullable=False)
-    
+
     # Action details
     action = Column(String(50), nullable=False)  # 'view', 'click', 'run', 'like', 'fork'
     weight = Column(Float, default=1.0)
-    
+
     # Metadata
     meta_data = Column(JSON)  # {"search_query": "...", "referral": "..."}
-    
+
     # Relationship
     user = relationship("User", back_populates="interactions")
+
+
+class CrawledContent(Base, TimestampMixin):
+    """
+    CrawledContent: Stores content from automated crawlers for admin review.
+    Content is reviewed before being promoted to the Tool table.
+    """
+    __tablename__ = "crawled_content"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Source information
+    source = Column(String(50), nullable=False, index=True)  # 'github', 'producthunt', 'hackernews'
+
+    # Basic content fields
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    url = Column(String(512), nullable=False, index=True)
+
+    # Flexible metadata storage for source-specific fields
+    metadata = Column(JSON)  # {"stars": 1234, "topics": [...], "author": "...", etc.}
+
+    # AI-powered suggestions
+    suggested_category = Column(String(100))  # Category slug
+    suggested_pricing = Column(String(50))  # 'free', 'freemium', 'paid'
+    ai_confidence_score = Column(Float, default=0.0)  # 0.0 to 1.0
+
+    # Review workflow
+    status = Column(String(20), default="pending", nullable=False, index=True)  # 'pending', 'approved', 'rejected'
+    reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
