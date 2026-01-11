@@ -40,6 +40,7 @@ class User(Base, TimestampMixin):
     workflows = relationship("AgentWorkflow", back_populates="user")
     interactions = relationship("UserInteraction", back_populates="user", cascade="all, delete-orphan")
     learning_progress = relationship("UserLearningProgress", back_populates="user", cascade="all, delete-orphan")
+    certificates = relationship("LearningCertificate", back_populates="user", cascade="all, delete-orphan")
 
 
 class Category(Base, TimestampMixin):
@@ -123,6 +124,7 @@ class LearningPath(Base, TimestampMixin):
     # Relationship to modules
     modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
     user_progress = relationship("UserLearningProgress", back_populates="learning_path", cascade="all, delete-orphan")
+    certificates = relationship("LearningCertificate", back_populates="learning_path", cascade="all, delete-orphan")
 
 
 class LearningPathModule(Base, TimestampMixin):
@@ -177,6 +179,35 @@ class UserLearningProgress(Base, TimestampMixin):
     # Relationships
     user = relationship("User", back_populates="learning_progress")
     learning_path = relationship("LearningPath", back_populates="user_progress")
+
+
+class LearningCertificate(Base, TimestampMixin):
+    """
+    LearningCertificate: Represents completion certificates issued to users
+    after successfully completing a learning path.
+    """
+    __tablename__ = "learning_certificates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Certificate identification
+    certificate_number = Column(String(100), unique=True, nullable=False, index=True)
+
+    # Certificate file and sharing
+    certificate_url = Column(String(512), nullable=False)  # Path to generated PDF
+    share_token = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False, index=True)
+
+    # Engagement metrics
+    view_count = Column(Integer, default=0)
+
+    # Issuance timestamp
+    issued_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="certificates")
+    learning_path = relationship("LearningPath", back_populates="certificates")
 
 
 # =============================================================================
