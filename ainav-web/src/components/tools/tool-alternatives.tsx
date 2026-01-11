@@ -78,7 +78,8 @@ export function ToolAlternatives({
         <Sparkles className="w-6 h-6 text-primary" />
         <h2 className="text-2xl font-bold">相似工具</h2>
         {originalToolRequiresVpn && (
-          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400">
+          <Badge className="bg-primary/10 text-primary border-primary/20">
+            <Star className="w-3 h-3 mr-1 fill-current" />
             优先推荐国内直连
           </Badge>
         )}
@@ -95,7 +96,7 @@ export function ToolAlternatives({
               <Card
                 className={cn(
                   "group overflow-hidden border-none glass hover:shadow-2xl transition-all duration-500 rounded-3xl h-full",
-                  isPrioritized && "ring-2 ring-emerald-500/50 bg-emerald-500/5"
+                  isPrioritized && "ring-2 ring-primary/50 bg-primary/5"
                 )}
               >
                 <CardContent className="p-6">
@@ -130,10 +131,10 @@ export function ToolAlternatives({
                         </h3>
                         {isPrioritized && (
                           <Badge
-                            className="bg-emerald-500 text-white border-0 shadow-md flex-shrink-0"
+                            className="bg-primary text-primary-foreground border-0 shadow-md flex-shrink-0"
                             aria-label="国内直连推荐"
                           >
-                            <Sparkles className="w-3 h-3 mr-1" />
+                            <Star className="w-3 h-3 mr-1 fill-current" />
                             推荐
                           </Badge>
                         )}
