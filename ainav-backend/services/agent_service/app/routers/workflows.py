@@ -1,7 +1,7 @@
 """
 Workflows Router - CRUD operations for agent workflows.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -12,8 +12,15 @@ import re
 
 from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
+from ..dependencies import get_current_active_user
+from ..schemas import (
+    WorkflowCreate,
+    WorkflowUpdate,
+    WorkflowResponse,
+    WorkflowSummary,
+    PaginatedWorkflowsResponse,
+)
 
 router = APIRouter()
 planner = PlannerAgent()
@@ -48,31 +55,28 @@ def generate_slug(name: str) -> str:
 async def list_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    user_id: Optional[UUID] = None,  # TODO: Get from auth
     is_public: Optional[bool] = None,
     is_template: Optional[bool] = None,
     search: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     List agent workflows with optional filtering.
+    Shows user's own workflows and public workflows.
     """
     query = select(AgentWorkflow)
     count_query = select(func.count(AgentWorkflow.id))
-    
-    # For now, if no user_id provided, show public workflows only
-    if user_id:
-        query = query.where(
-            (AgentWorkflow.user_id == user_id) |
-            (AgentWorkflow.is_public == True)
-        )
-        count_query = count_query.where(
-            (AgentWorkflow.user_id == user_id) |
-            (AgentWorkflow.is_public == True)
-        )
-    else:
-        query = query.where(AgentWorkflow.is_public == True)
-        count_query = count_query.where(AgentWorkflow.is_public == True)
+
+    # Show user's workflows and public workflows
+    query = query.where(
+        (AgentWorkflow.user_id == current_user.id) |
+        (AgentWorkflow.is_public == True)
+    )
+    count_query = count_query.where(
+        (AgentWorkflow.user_id == current_user.id) |
+        (AgentWorkflow.is_public == True)
+    )
     
     if is_public is not None:
         query = query.where(AgentWorkflow.is_public == is_public)
@@ -122,20 +126,22 @@ async def list_workflows(
 async def list_my_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     List current user's workflows.
     """
-    # TODO: Get user_id from auth token
-    # For now, return empty or all for testing
-    query = select(AgentWorkflow).order_by(AgentWorkflow.updated_at.desc())
-    count_query = select(func.count(AgentWorkflow.id))
-    
+    query = select(AgentWorkflow).where(
+        AgentWorkflow.user_id == current_user.id
+    ).order_by(AgentWorkflow.updated_at.desc())
+    count_query = select(func.count(AgentWorkflow.id)).where(
+        AgentWorkflow.user_id == current_user.id
+    )
+
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
-    
+
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
     
@@ -206,21 +212,28 @@ async def list_public_workflows(
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(
     workflow_id: UUID,
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Get a specific workflow by ID.
+    User must be the owner or workflow must be public.
     """
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check permissions (owner or public)
-    
+
+    # Check permissions: user must be owner or workflow must be public
+    if workflow.user_id != current_user.id and not workflow.is_public:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to access this workflow"
+        )
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -246,20 +259,12 @@ async def get_workflow_by_slug(
 @router.post("", response_model=WorkflowResponse, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
     Create a new agent workflow.
     """
-    # TODO: Get user_id from auth
-    # For now, use a placeholder or first user
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available. Please create a user first.")
-    
     # Check slug uniqueness
     existing = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == workflow_data.slug)
@@ -267,11 +272,11 @@ async def create_workflow(
     if existing.scalar_one_or_none():
         # Append unique suffix
         workflow_data.slug = f"{workflow_data.slug}-{str(uuid4())[:8]}"
-    
+
     # Convert graph_json from Pydantic model to dict
     data = workflow_data.model_dump()
     data['graph_json'] = workflow_data.graph_json.model_dump()
-    data['user_id'] = user.id
+    data['user_id'] = current_user.id
     
     workflow = AgentWorkflow(**data)
     db.add(workflow)
@@ -285,6 +290,7 @@ async def create_workflow(
 async def update_workflow(
     workflow_id: UUID,
     workflow_data: WorkflowUpdate,
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -292,16 +298,21 @@ async def update_workflow(
     Increments version and records history when graph changes.
     """
     from datetime import datetime
-    
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
+
+    # Validate ownership
+    if workflow.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to update this workflow"
+        )
     
     update_data = workflow_data.model_dump(exclude_unset=True)
     
@@ -332,6 +343,7 @@ async def update_workflow(
 @router.delete("/{workflow_id}", status_code=204)
 async def delete_workflow(
     workflow_id: UUID,
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -341,12 +353,17 @@ async def delete_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Check ownership
-    
+
+    # Validate ownership
+    if workflow.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to delete this workflow"
+        )
+
     await db.delete(workflow)
     await db.commit()
 
@@ -354,7 +371,7 @@ async def delete_workflow(
 @router.post("/{workflow_id}/fork", response_model=WorkflowResponse, status_code=201)
 async def fork_workflow(
     workflow_id: UUID,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -365,23 +382,16 @@ async def fork_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     original = result.scalar_one_or_none()
-    
+
     if not original:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     if not original.is_public:
         raise HTTPException(status_code=403, detail="Cannot fork private workflow")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
+
     # Create fork
     forked = AgentWorkflow(
-        user_id=user.id,
+        user_id=current_user.id,
         name=f"{original.name} (Fork)",
         name_zh=f"{original.name_zh} (Fork)" if original.name_zh else None,
         slug=f"{original.slug}-fork-{str(uuid4())[:8]}",
