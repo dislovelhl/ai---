@@ -17,6 +17,7 @@ from ..schemas import (
     PaginatedExecutionsResponse, ReactFlowNode, ReactFlowEdge
 )
 from ..core.executor import WorkflowExecutor
+from ..dependencies import check_execution_rate_limit
 
 # Try to import LangGraph engine (optional dependency)
 try:
@@ -114,6 +115,7 @@ async def run_workflow(
     execution_data: ExecutionCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(check_execution_rate_limit),
 ):
     """
     Execute a workflow. Creates an execution record and runs in background.
@@ -123,16 +125,9 @@ async def run_workflow(
         select(AgentWorkflow).where(AgentWorkflow.id == execution_data.workflow_id)
     )
     workflow = workflow_result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
     
     # Create execution record
     execution = AgentExecution(
@@ -275,6 +270,7 @@ async def cancel_execution(
 async def run_workflow_sync(
     execution_data: ExecutionCreate,
     db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(check_execution_rate_limit),
 ):
     """
     Execute a workflow synchronously (wait for result).
@@ -285,16 +281,9 @@ async def run_workflow_sync(
         select(AgentWorkflow).where(AgentWorkflow.id == execution_data.workflow_id)
     )
     workflow = workflow_result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
     
     start_time = datetime.now(timezone.utc)
     
@@ -358,15 +347,18 @@ async def run_workflow_sync(
 
 
 @router.post("/run-direct", response_model=DirectExecutionResponse)
-async def run_workflow_direct(request: DirectExecutionRequest):
+async def run_workflow_direct(
+    request: DirectExecutionRequest,
+    user: User = Depends(check_execution_rate_limit),
+):
     """
     Execute a workflow directly from JSON without saving to database.
-    
+
     This is useful for:
     - Testing workflows in the Studio before saving
     - Quick one-off executions
     - Integration with external systems
-    
+
     Supports two execution engines:
     - default: Custom WorkflowExecutor
     - langgraph: LangGraph-based engine (if available)
