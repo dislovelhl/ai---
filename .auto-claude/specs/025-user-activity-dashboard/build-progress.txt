@@ -155,3 +155,92 @@ Ready to begin implementation starting with Phase 1, Subtask 1.1 (Create dashboa
 - `POST /v1/dashboard/star` - Toggle star status (accepts item_type and item_id)
 
 **Next up:** Subtask 1.4 - Build recommendation algorithm
+
+---
+
+### Subtask 1.4: Build recommendation algorithm ✅ COMPLETED
+
+**What was done:**
+- Enhanced `/v1/personalization/recommendations` endpoint with comprehensive collaborative filtering algorithm
+- Implemented three recommendation strategies:
+  1. **User-based collaborative filtering**: Finds similar users using Jaccard similarity and recommends items they interacted with
+  2. **Category-based recommendations**: Suggests tools from categories the user has shown interest in
+  3. **Trending items**: Includes popular tools and workflows for diversity
+- **Algorithm features**:
+  - Weighted scoring based on action types (star=2.0, fork=1.8, run=1.5, like=1.2)
+  - Similarity threshold requires minimum 2 overlapping items between users
+  - Batch loading of item details to prevent N+1 queries
+  - Deduplication across recommendation sources
+  - Prioritization: collaborative > category-based > trending
+- **Response structure**:
+  - Returns `RecommendationsResponse` with full item details
+  - Each recommendation includes: id, type, name, description, slug, logo/icon, reason, and score
+  - Provides `based_on` field explaining recommendation source
+- **Edge case handling**:
+  - Users with no interaction history receive trending items
+  - Users with limited history get category-based + trending mix
+- All code follows existing patterns with async/await, proper authentication, and Pydantic schemas
+- Syntax validation passed
+
+**Implementation details:**
+1. `_find_similar_users()`: Uses Jaccard similarity to identify users with overlapping item interactions
+2. `_get_collaborative_recommendations()`: Scores items based on similar users' interactions weighted by action type
+3. `_get_category_based_recommendations()`: Finds top 3 categories from user's tool interactions and recommends similar tools
+4. `_get_trending_recommendations()`: Returns highly-rated tools and popular public workflows
+5. `_combine_recommendations()`: Deduplicates and ranks by score
+6. `_fetch_recommendation_details()`: Batch loads Tool and AgentWorkflow details
+
+**Files modified:**
+- `ainav-backend/services/user_service/app/routers/personalization.py` (complete rewrite of recommendation logic)
+
+**API endpoint:**
+- `GET /v1/personalization/recommendations?limit=10` - Get personalized recommendations
+
+**Next up:** Subtask 1.5 - Implement learning progress tracking
+
+---
+
+### Subtask 1.5: Implement learning progress tracking ✅ COMPLETED
+
+**What was done:**
+- Implemented `GET /v1/dashboard/learning-progress` endpoint in `dashboard.py`
+- Features:
+  - Queries UserInteraction records with `item_type` in ['roadmap', 'prompt']
+  - Returns LearningProgressResponse with paths, overall progress, and statistics
+  - Gracefully handles the current state where Roadmap/LearningPath models don't exist yet
+  - Includes comprehensive TODO comments for future enhancement
+- **Design approach:**
+  - Uses existing UserInteraction model for tracking learning activity
+  - Prepared infrastructure for future Roadmap/LearningPath models
+  - Returns valid empty response until learning content models are added
+  - Follows patterns from existing dashboard endpoints (activity, saved items)
+- Response includes:
+  - `paths`: List of LearningPathProgress objects (currently empty)
+  - `overall_progress`: Overall learning progress percentage (0.0 when no paths exist)
+  - `total_paths`: Total number of learning paths tracked
+  - `completed_paths`: Number of paths with 100% completion
+  - `active_paths`: Number of paths with 0-100% completion
+- All code follows existing patterns with async/await and proper authentication
+- Syntax validation passed
+
+**Implementation details:**
+1. Query UserInteraction for item_type='roadmap' or 'prompt'
+2. Group interactions by item_id to track progress per learning path
+3. Calculate completion statistics (currently returns empty as models don't exist)
+4. Return LearningProgressResponse following the schema
+
+**Future enhancement (when Roadmap models are added):**
+- Fetch Roadmap records from database
+- Calculate total_items from roadmap structure
+- Count completed_items from interactions with action='complete' or 'finished'
+- Calculate progress_percentage per path
+- Track last_activity timestamp
+- See detailed TODO comments in the code for implementation guide
+
+**Files modified:**
+- `ainav-backend/services/user_service/app/routers/dashboard.py` (added endpoint)
+
+**API endpoint:**
+- `GET /v1/dashboard/learning-progress` - Get learning progress tracking
+
+**Next up:** Subtask 1.6 - Register dashboard router in main.py (already completed in subtask 1.2)

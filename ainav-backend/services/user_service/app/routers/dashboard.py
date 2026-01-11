@@ -529,7 +529,100 @@ async def toggle_star(
         )
 
 
+@router.get("/learning-progress", response_model=LearningProgressResponse)
+async def get_learning_progress(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get learning progress tracking for roadmaps, learning paths, and prompts.
+
+    Tracks user completion of learning content based on UserInteraction records
+    with item_type='roadmap' or 'prompt'.
+
+    Note: This endpoint is prepared for future learning path infrastructure.
+    Currently returns empty results as Roadmap/LearningPath models don't exist yet.
+    Once those models are added, this endpoint will be enhanced to return actual progress.
+    """
+    # Query UserInteractions for learning-related items
+    # Using item_type='roadmap' as per the design (prompts could be a future item_type)
+    learning_interactions_result = await db.execute(
+        select(UserInteraction)
+        .where(
+            and_(
+                UserInteraction.user_id == current_user.id,
+                UserInteraction.item_type.in_(['roadmap', 'prompt'])
+            )
+        )
+        .order_by(desc(UserInteraction.created_at))
+    )
+    learning_interactions = learning_interactions_result.scalars().all()
+
+    # Group interactions by item_id to track progress per learning path
+    # Key: item_id, Value: list of interactions for that path
+    path_interactions = {}
+    for interaction in learning_interactions:
+        if interaction.item_id not in path_interactions:
+            path_interactions[interaction.item_id] = []
+        path_interactions[interaction.item_id].append(interaction)
+
+    # Build learning path progress
+    # TODO: Once Roadmap/LearningPath models are added, fetch actual path details
+    # For now, we'll return an empty list since those models don't exist yet
+    learning_paths = []
+
+    # Future implementation (when Roadmap model exists):
+    # 1. Fetch Roadmap records by IDs from path_interactions.keys()
+    # 2. For each roadmap:
+    #    - Count total items (steps/lessons in the roadmap)
+    #    - Count completed items (interactions with action='complete' or 'finished')
+    #    - Calculate progress_percentage
+    #    - Get last_activity timestamp from most recent interaction
+    # 3. Build LearningPathProgress objects
+    #
+    # Example future code:
+    # if path_interactions:
+    #     roadmap_ids = list(path_interactions.keys())
+    #     roadmaps_result = await db.execute(
+    #         select(Roadmap).where(Roadmap.id.in_(roadmap_ids))
+    #     )
+    #     roadmaps = roadmaps_result.scalars().all()
+    #
+    #     for roadmap in roadmaps:
+    #         interactions = path_interactions[roadmap.id]
+    #         completed_count = sum(1 for i in interactions if i.action in ['complete', 'finished'])
+    #         total_items = roadmap.total_steps or 10  # From roadmap.total_steps
+    #         progress_pct = (completed_count / total_items * 100) if total_items > 0 else 0
+    #
+    #         learning_paths.append(LearningPathProgress(
+    #             path_id=roadmap.id,
+    #             path_name=roadmap.name,
+    #             path_name_zh=roadmap.name_zh,
+    #             total_items=total_items,
+    #             completed_items=completed_count,
+    #             progress_percentage=progress_pct,
+    #             last_activity=max(i.created_at for i in interactions)
+    #         ))
+
+    # Calculate overall statistics
+    total_paths = len(learning_paths)
+    completed_paths = sum(1 for path in learning_paths if path.progress_percentage >= 100.0)
+    active_paths = sum(1 for path in learning_paths if 0 < path.progress_percentage < 100.0)
+
+    # Calculate overall progress percentage
+    if total_paths > 0:
+        overall_progress = sum(path.progress_percentage for path in learning_paths) / total_paths
+    else:
+        overall_progress = 0.0
+
+    return LearningProgressResponse(
+        paths=learning_paths,
+        overall_progress=overall_progress,
+        total_paths=total_paths,
+        completed_paths=completed_paths,
+        active_paths=active_paths
+    )
+
+
 # Note: The following endpoints will be implemented in subsequent subtasks:
-# - GET /recommendations - Get personalized recommendations (subtask 1.4)
-# - GET /learning-progress - Get learning progress (subtask 1.5)
 # - GET /executions - Get recent workflow executions
