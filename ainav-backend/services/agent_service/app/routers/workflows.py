@@ -359,7 +359,7 @@ async def delete_workflow(
 @router.post("/{workflow_id}/fork", response_model=WorkflowResponse, status_code=201)
 async def fork_workflow(
     workflow_id: UUID,
-    # user_id: UUID = Depends(get_current_user_id),  # TODO: Add auth
+    user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -376,17 +376,10 @@ async def fork_workflow(
     
     if not original.is_public:
         raise HTTPException(status_code=403, detail="Cannot fork private workflow")
-    
-    # TODO: Get user_id from auth
-    user_result = await db.execute(select(User).limit(1))
-    user = user_result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="No user available")
-    
+
     # Create fork
     forked = AgentWorkflow(
-        user_id=user.id,
+        user_id=user_id,
         name=f"{original.name} (Fork)",
         name_zh=f"{original.name_zh} (Fork)" if original.name_zh else None,
         slug=f"{original.slug}-fork-{str(uuid4())[:8]}",
