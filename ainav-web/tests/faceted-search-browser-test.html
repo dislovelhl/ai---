@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faceted Search API Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-controls {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        label {
+            font-weight: 500;
+            color: #555;
+            min-width: 120px;
+        }
+
+        input[type="text"],
+        select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .stat {
+            display: inline-block;
+            margin-right: 20px;
+            padding: 8px 16px;
+            background: white;
+            border-radius: 6px;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+            display: block;
+        }
+
+        .stat-value {
+            color: #333;
+            font-weight: 600;
+            font-size: 20px;
+            display: block;
+        }
+
+        .facets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .facet-group {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .facet-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .facet-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+
+        .facet-item:last-child {
+            border-bottom: none;
+        }
+
+        .facet-count {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .tool-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .tool-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .tool-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-accessible {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-blocked {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-vpn {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-api {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Faceted Search API Test</h1>
+        <p class="subtitle">Test the China accessibility faceted search integration</p>
+
+        <div class="test-controls">
+            <div class="control-group">
+                <label>Search Query:</label>
+                <input type="text" id="searchQuery" placeholder="Enter search term (e.g., AI, ChatGPT)">
+            </div>
+
+            <div class="control-group">
+                <label>China Accessible:</label>
+                <select id="chinaAccessible">
+                    <option value="">All Tools</option>
+                    <option value="true">Accessible Only</option>
+                    <option value="false">Not Accessible</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Pricing Type:</label>
+                <select id="pricingType">
+                    <option value="">All Pricing</option>
+                    <option value="free">Free</option>
+                    <option value="freemium">Freemium</option>
+                    <option value="paid">Paid</option>
+                    <option value="beta_free">Beta Free</option>
+                    <option value="open_source">Open Source</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Has API:</label>
+                <select id="hasApi">
+                    <option value="">All</option>
+                    <option value="true">With API</option>
+                    <option value="false">Without API</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Page Size:</label>
+                <select id="pageSize">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button onclick="runTest()">🔍 Run Test</button>
+                <button onclick="clearResults()" style="background: #6b7280;">Clear Results</button>
+            </div>
+        </div>
+
+        <div id="results" class="results"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8002/v1';
+
+        async function runTest() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Testing API...</p></div>';
+
+            // Build query parameters
+            const params = new URLSearchParams();
+            const query = document.getElementById('searchQuery').value;
+            const chinaAccessible = document.getElementById('chinaAccessible').value;
+            const pricingType = document.getElementById('pricingType').value;
+            const hasApi = document.getElementById('hasApi').value;
+            const pageSize = document.getElementById('pageSize').value;
+
+            if (query) params.set('q', query);
+            if (chinaAccessible) params.set('is_china_accessible', chinaAccessible);
+            if (pricingType) params.set('pricing_type', pricingType);
+            if (hasApi) params.set('has_api', hasApi);
+            params.set('page_size', pageSize);
+
+            const url = `${API_URL}/search/faceted?${params.toString()}`;
+
+            try {
+                const startTime = Date.now();
+                const response = await fetch(url);
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayResults(data, responseTime, url);
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${error.message}
+                        <br><br>
+                        <strong>Troubleshooting:</strong>
+                        <ul style="margin-top: 10px; margin-left: 20px;">
+                            <li>Make sure the backend search service is running on http://localhost:8002</li>
+                            <li>Check if CORS is enabled for localhost:3000</li>
+                            <li>Verify that Meilisearch is running and indexed</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResults(data, responseTime, url) {
+            const resultsDiv = document.getElementById('results');
+
+            let html = `
+                <div class="section">
+                    <h3>📊 Request Info</h3>
+                    <div class="stat">
+                        <span class="stat-label">Response Time</span>
+                        <span class="stat-value">${responseTime}ms</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Total Results</span>
+                        <span class="stat-value">${data.estimated_total_hits}</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Page</span>
+                        <span class="stat-value">${data.page}</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Page Size</span>
+                        <span class="stat-value">${data.page_size}</span>
+                    </div>
+                    <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 6px; font-size: 12px; word-break: break-all; font-family: monospace;">
+                        ${url}
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🎯 Facet Counts</h3>
+                    <div class="facets">
+                        <div class="facet-group">
+                            <div class="facet-title">🇨🇳 China Accessibility</div>
+                            <div class="facet-item">
+                                <span>Accessible</span>
+                                <span class="facet-count">${data.facets.is_china_accessible.accessible}</span>
+                            </div>
+                            <div class="facet-item">
+                                <span>Not Accessible</span>
+                                <span class="facet-count">${data.facets.is_china_accessible.not_accessible}</span>
+                            </div>
+                        </div>
+
+                        <div class="facet-group">
+                            <div class="facet-title">🔌 API Availability</div>
+                            <div class="facet-item">
+                                <span>With API</span>
+                                <span class="facet-count">${data.facets.has_api.with_api}</span>
+                            </div>
+                            <div class="facet-item">
+                                <span>Without API</span>
+                                <span class="facet-count">${data.facets.has_api.without_api}</span>
+                            </div>
+                        </div>
+
+                        <div class="facet-group">
+                            <div class="facet-title">💰 Pricing Type</div>
+                            ${Object.entries(data.facets.pricing_type || {})
+                                .map(([key, value]) => `
+                                    <div class="facet-item">
+                                        <span>${key}</span>
+                                        <span class="facet-count">${value}</span>
+                                    </div>
+                                `).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🛠️ Tools (${data.hits.length} results)</h3>
+                    <div class="tools-grid">
+                        ${data.hits.map(tool => `
+                            <div class="tool-card">
+                                <div class="tool-name">${tool.name}</div>
+                                <div class="tool-badges">
+                                    ${tool.is_china_accessible
+                                        ? '<span class="badge badge-accessible">国内可用</span>'
+                                        : '<span class="badge badge-blocked">访问受限</span>'
+                                    }
+                                    ${tool.has_api ? '<span class="badge badge-api">Has API</span>' : ''}
+                                    <span class="badge" style="background: #8b5cf6; color: white;">${tool.pricing_type}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('chinaAccessible').value = '';
+            document.getElementById('pricingType').value = '';
+            document.getElementById('hasApi').value = '';
+        }
+
+        // Add Enter key support
+        document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                runTest();
+            }
+        });
+    </script>
+</body>
+</html>
