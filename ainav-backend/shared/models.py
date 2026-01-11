@@ -282,3 +282,24 @@ class AccessibilityCheckLog(Base, TimestampMixin):
 
     # Relationship
     tool = relationship("Tool")
+
+
+class AccessibilityAudit(Base, TimestampMixin):
+    """
+    Audit trail for tracking accessibility status changes.
+    Records when tool accessibility status changes (blocked/unblocked).
+    """
+    __tablename__ = "accessibility_audits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tool_id = Column(UUID(as_uuid=True), ForeignKey("tools.id"), nullable=False)
+
+    # Status change details
+    old_status = Column(JSON, nullable=False)  # {"is_china_accessible": true, "requires_vpn": false}
+    new_status = Column(JSON, nullable=False)  # {"is_china_accessible": false, "requires_vpn": true}
+    change_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    change_reason = Column(Text, nullable=True)  # Explanation of why status changed
+    triggered_by = Column(String(100), nullable=False)  # "system", "admin:user_id", "manual_override"
+
+    # Relationship
+    tool = relationship("Tool")
