@@ -394,3 +394,61 @@ class UsageRecord(Base, TimestampMixin):
 
     # Relationships
     user = relationship("User", backref="usage_records")
+
+
+class PaymentTransaction(Base, TimestampMixin):
+    """
+    PaymentTransaction: Records all payment transactions and billing history.
+    Supports Stripe payments with Chinese payment methods (Alipay, WeChat Pay).
+    """
+    __tablename__ = "payment_transactions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Foreign keys
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    subscription_id = Column(UUID(as_uuid=True), ForeignKey("user_subscriptions.id"), nullable=True)
+
+    # Stripe transaction IDs
+    stripe_payment_intent_id = Column(String(255), unique=True, index=True, nullable=True)  # Stripe PaymentIntent ID
+    stripe_charge_id = Column(String(255), unique=True, index=True, nullable=True)  # Stripe Charge ID
+    stripe_invoice_id = Column(String(255), unique=True, index=True, nullable=True)  # Stripe Invoice ID
+
+    # Transaction details
+    amount = Column(Float, nullable=False)  # Transaction amount
+    currency = Column(String(3), default="CNY", nullable=False)  # ISO currency code (CNY, USD, etc.)
+
+    # Payment method
+    payment_method = Column(String(50), nullable=False)  # 'card', 'alipay', 'wechat_pay'
+    payment_method_brand = Column(String(50), nullable=True)  # 'visa', 'mastercard', 'alipay', 'wechat'
+    payment_method_last4 = Column(String(4), nullable=True)  # Last 4 digits for reference
+
+    # Transaction status
+    status = Column(String(50), default="pending", nullable=False, index=True)  # 'pending', 'processing', 'succeeded', 'failed', 'cancelled', 'refunded'
+
+    # Transaction type
+    transaction_type = Column(String(50), nullable=False)  # 'subscription', 'upgrade', 'renewal', 'refund'
+
+    # Billing period (for subscription payments)
+    billing_period_start = Column(DateTime(timezone=True), nullable=True)
+    billing_period_end = Column(DateTime(timezone=True), nullable=True)
+
+    # Error tracking (for failed transactions)
+    error_code = Column(String(100), nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Refund tracking
+    refunded_amount = Column(Float, default=0.0)  # Amount refunded (if applicable)
+    refunded_at = Column(DateTime(timezone=True), nullable=True)
+    refund_reason = Column(Text, nullable=True)
+
+    # Metadata
+    metadata = Column(JSON)  # Additional Stripe metadata and custom fields
+
+    # Payment provider details (for Chinese payment methods)
+    provider = Column(String(50), default="stripe")  # 'stripe', 'alipay_direct', 'wechat_direct' (future expansion)
+    provider_transaction_id = Column(String(255), nullable=True)  # Provider-specific transaction ID
+
+    # Relationships
+    user = relationship("User", backref="payment_transactions")
+    subscription = relationship("UserSubscription", backref="payment_transactions")
