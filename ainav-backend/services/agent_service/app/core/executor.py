@@ -11,6 +11,8 @@ from uuid import UUID
 import httpx
 import json
 import logging
+import gzip
+import base64
 
 from shared.config import settings
 
@@ -31,6 +33,7 @@ class NodeResult:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    checkpoint: Optional[str] = None  # Compressed state snapshot for replay
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +48,7 @@ class NodeResult:
             "timestamp": self.timestamp.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "checkpoint": self.checkpoint,
         }
 
     def to_execution_step(self) -> dict:
@@ -58,6 +62,7 @@ class NodeResult:
             "token_usage": self.token_usage or {"input": 0, "output": 0, "total": 0},
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "checkpoint": self.checkpoint,
         }
 
 
@@ -113,25 +118,113 @@ class WorkflowExecutor:
         self.token_usage = 0
         self.api_calls = 0
         self.execution_steps: list[dict] = []
-    
+        self.initial_input = None  # Store for checkpoint replay
+
+    def _create_checkpoint(self) -> str:
+        """
+        Create a compressed state snapshot for replay capability.
+
+        Captures the current workflow state including:
+        - All node results executed so far
+        - Current execution context (token usage, API calls)
+        - Graph structure for validation
+
+        Returns:
+            Base64-encoded gzip-compressed JSON string
+        """
+        try:
+            # Build state snapshot
+            state_snapshot = {
+                "graph": {
+                    "nodes": list(self.nodes.keys()),
+                    "edges": self.edges,
+                },
+                "results": {
+                    node_id: {
+                        "node_id": result.node_id,
+                        "node_type": result.node_type,
+                        "status": result.status,
+                        "input_data": result.input_data,
+                        "output_data": result.output_data,
+                        "error_message": result.error_message,
+                        "token_usage": result.token_usage,
+                    }
+                    for node_id, result in self.results.items()
+                },
+                "context": {
+                    "token_usage": self.token_usage,
+                    "api_calls": self.api_calls,
+                    "initial_input": self.initial_input,
+                },
+                "metadata": {
+                    "checkpoint_at": datetime.now(timezone.utc).isoformat(),
+                    "nodes_executed": len(self.results),
+                }
+            }
+
+            # Serialize to JSON
+            json_data = json.dumps(state_snapshot, ensure_ascii=False)
+
+            # Compress using gzip
+            compressed = gzip.compress(json_data.encode('utf-8'))
+
+            # Encode to base64 for safe storage in JSON
+            checkpoint = base64.b64encode(compressed).decode('ascii')
+
+            return checkpoint
+
+        except Exception as e:
+            logger.warning(f"Failed to create checkpoint: {e}")
+            return None
+
+    @staticmethod
+    def _decompress_checkpoint(checkpoint: str) -> dict:
+        """
+        Decompress a checkpoint to restore workflow state.
+
+        Args:
+            checkpoint: Base64-encoded gzip-compressed JSON string
+
+        Returns:
+            Deserialized state snapshot dictionary
+        """
+        try:
+            # Decode from base64
+            compressed = base64.b64decode(checkpoint.encode('ascii'))
+
+            # Decompress
+            json_data = gzip.decompress(compressed).decode('utf-8')
+
+            # Parse JSON
+            state_snapshot = json.loads(json_data)
+
+            return state_snapshot
+
+        except Exception as e:
+            logger.error(f"Failed to decompress checkpoint: {e}")
+            raise ValueError(f"Invalid checkpoint data: {e}")
+
     async def execute(self, initial_input: Any) -> ExecutionResult:
         """
         Execute the workflow in topological order.
         """
         try:
+            # Store initial input for checkpoint replay
+            self.initial_input = initial_input
+
             # Find input nodes (no incoming edges)
             start_nodes = [
                 nid for nid, node in self.nodes.items()
                 if nid not in self.incoming or len(self.incoming[nid]) == 0
             ]
-            
+
             if not start_nodes:
                 # Fallback: find nodes labeled as 'input' type
                 start_nodes = [
                     nid for nid, node in self.nodes.items()
                     if node.get("type") == "input"
                 ]
-            
+
             if not start_nodes:
                 return ExecutionResult(
                     output=None,
@@ -300,7 +393,15 @@ class WorkflowExecutor:
                     completed_at=completed_at,
                 )
 
+        # Store result
         self.results[node_id] = result
+
+        # Create checkpoint after successful execution for replay capability
+        # Only create checkpoint on success to save storage space
+        if result.status == "success":
+            checkpoint = self._create_checkpoint()
+            result.checkpoint = checkpoint
+
         self.execution_steps.append(result.to_execution_step())
         return result
 
