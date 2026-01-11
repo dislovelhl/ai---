@@ -101,11 +101,11 @@ async def list_workflows(
     
     # Paginate and order by popularity (run_count + star_count)
     offset = (page - 1) * page_size
-    query = query.order_by(
+    query = query.options(selectinload(AgentWorkflow.tags)).order_by(
         (AgentWorkflow.run_count + AgentWorkflow.star_count).desc(),
         AgentWorkflow.created_at.desc()
     ).offset(offset).limit(page_size)
-    
+
     result = await db.execute(query)
     workflows = result.scalars().all()
     
@@ -132,13 +132,13 @@ async def list_my_workflows(
     # For now, return empty or all for testing
     query = select(AgentWorkflow).order_by(AgentWorkflow.updated_at.desc())
     count_query = select(func.count(AgentWorkflow.id))
-    
+
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
-    
+
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-    
+    query = query.options(selectinload(AgentWorkflow.tags)).offset(offset).limit(page_size)
+
     result = await db.execute(query)
     workflows = result.scalars().all()
     
@@ -184,13 +184,13 @@ async def list_public_workflows(
     
     total = (await db.execute(count_query)).scalar() or 0
     pages = math.ceil(total / page_size) if total > 0 else 1
-    
+
     offset = (page - 1) * page_size
-    query = query.order_by(
+    query = query.options(selectinload(AgentWorkflow.tags)).order_by(
         AgentWorkflow.star_count.desc(),
         AgentWorkflow.run_count.desc()
     ).offset(offset).limit(page_size)
-    
+
     result = await db.execute(query)
     workflows = result.scalars().all()
     
@@ -212,15 +212,17 @@ async def get_workflow(
     Get a specific workflow by ID.
     """
     result = await db.execute(
-        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+        select(AgentWorkflow)
+        .options(selectinload(AgentWorkflow.tags))
+        .where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Check permissions (owner or public)
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -233,13 +235,15 @@ async def get_workflow_by_slug(
     Get a specific workflow by slug.
     """
     result = await db.execute(
-        select(AgentWorkflow).where(AgentWorkflow.slug == slug)
+        select(AgentWorkflow)
+        .options(selectinload(AgentWorkflow.tags))
+        .where(AgentWorkflow.slug == slug)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -252,14 +256,16 @@ async def create_workflow(
     """
     Create a new agent workflow.
     """
+    from shared.models import WorkflowTag
+
     # TODO: Get user_id from auth
     # For now, use a placeholder or first user
     user_result = await db.execute(select(User).limit(1))
     user = user_result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(status_code=400, detail="No user available. Please create a user first.")
-    
+
     # Check slug uniqueness
     existing = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.slug == workflow_data.slug)
@@ -267,17 +273,26 @@ async def create_workflow(
     if existing.scalar_one_or_none():
         # Append unique suffix
         workflow_data.slug = f"{workflow_data.slug}-{str(uuid4())[:8]}"
-    
-    # Convert graph_json from Pydantic model to dict
-    data = workflow_data.model_dump()
+
+    # Convert graph_json from Pydantic model to dict and extract tag_ids
+    data = workflow_data.model_dump(exclude={'tag_ids'})
     data['graph_json'] = workflow_data.graph_json.model_dump()
     data['user_id'] = user.id
-    
+
     workflow = AgentWorkflow(**data)
+
+    # Handle tags if provided
+    if workflow_data.tag_ids:
+        tag_result = await db.execute(
+            select(WorkflowTag).where(WorkflowTag.id.in_(workflow_data.tag_ids))
+        )
+        tags = tag_result.scalars().all()
+        workflow.tags = tags
+
     db.add(workflow)
     await db.commit()
-    await db.refresh(workflow)
-    
+    await db.refresh(workflow, attribute_names=['tags'])
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -292,23 +307,24 @@ async def update_workflow(
     Increments version and records history when graph changes.
     """
     from datetime import datetime
-    
+    from shared.models import WorkflowTag
+
     result = await db.execute(
         select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
     )
     workflow = result.scalar_one_or_none()
-    
+
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     # TODO: Check ownership
-    
-    update_data = workflow_data.model_dump(exclude_unset=True)
-    
+
+    update_data = workflow_data.model_dump(exclude_unset=True, exclude={'tag_ids'})
+
     # Handle graph_json conversion if present and track versioning
     if 'graph_json' in update_data and update_data['graph_json']:
         update_data['graph_json'] = workflow_data.graph_json.model_dump()
-        
+
         # Increment version and record history
         workflow.version = (workflow.version or 1) + 1
         history_entry = {
@@ -319,13 +335,21 @@ async def update_workflow(
         if workflow.version_history is None:
             workflow.version_history = []
         workflow.version_history = workflow.version_history + [history_entry]
-    
+
+    # Handle tags update if provided
+    if workflow_data.tag_ids is not None:
+        tag_result = await db.execute(
+            select(WorkflowTag).where(WorkflowTag.id.in_(workflow_data.tag_ids))
+        )
+        tags = tag_result.scalars().all()
+        workflow.tags = tags
+
     for field, value in update_data.items():
         setattr(workflow, field, value)
-    
+
     await db.commit()
-    await db.refresh(workflow)
-    
+    await db.refresh(workflow, attribute_names=['tags'])
+
     return WorkflowResponse.model_validate(workflow)
 
 
@@ -360,25 +384,27 @@ async def fork_workflow(
     """
     Fork (clone) a public workflow to user's collection.
     """
-    # Get original workflow
+    # Get original workflow with tags
     result = await db.execute(
-        select(AgentWorkflow).where(AgentWorkflow.id == workflow_id)
+        select(AgentWorkflow)
+        .options(selectinload(AgentWorkflow.tags))
+        .where(AgentWorkflow.id == workflow_id)
     )
     original = result.scalar_one_or_none()
-    
+
     if not original:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
+
     if not original.is_public:
         raise HTTPException(status_code=403, detail="Cannot fork private workflow")
-    
+
     # TODO: Get user_id from auth
     user_result = await db.execute(select(User).limit(1))
     user = user_result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(status_code=400, detail="No user available")
-    
+
     # Create fork
     forked = AgentWorkflow(
         user_id=user.id,
@@ -397,16 +423,20 @@ async def fork_workflow(
         temperature=original.temperature,
         is_public=False,  # Forks start as private
         forked_from_id=original.id,
+        category_id=original.category_id,  # Preserve category
     )
-    
+
+    # Preserve tags
+    forked.tags = original.tags
+
     db.add(forked)
-    
+
     # Increment fork count on original
     original.fork_count += 1
-    
+
     await db.commit()
-    await db.refresh(forked)
-    
+    await db.refresh(forked, attribute_names=['tags'])
+
     return WorkflowResponse.model_validate(forked)
 
 

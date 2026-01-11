@@ -139,6 +139,8 @@ class WorkflowCreate(WorkflowBase):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     is_public: bool = False
     is_template: bool = False
+    category_id: Optional[UUID] = None
+    tag_ids: list[UUID] = Field(default_factory=list)
 
 
 class WorkflowUpdate(BaseModel):
@@ -156,6 +158,8 @@ class WorkflowUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     is_public: Optional[bool] = None
     is_template: Optional[bool] = None
+    category_id: Optional[UUID] = None
+    tag_ids: Optional[list[UUID]] = None
 
 
 class WorkflowResponse(WorkflowBase):
@@ -174,6 +178,8 @@ class WorkflowResponse(WorkflowBase):
     fork_count: int
     run_count: int
     star_count: int
+    category_id: Optional[UUID]
+    tags: list["WorkflowTagResponse"] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -194,6 +200,8 @@ class WorkflowSummary(BaseModel):
     fork_count: int
     run_count: int
     star_count: int
+    category_id: Optional[UUID]
+    tags: list["WorkflowTagResponse"] = Field(default_factory=list)
     created_at: datetime
 
     class Config:
