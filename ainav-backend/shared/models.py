@@ -119,6 +119,39 @@ class LearningPath(Base, TimestampMixin):
     prerequisites = Column(JSON, default=list)  # ["Python basics", "SQL fundamentals"]
     learning_outcomes = Column(JSON, default=list)  # ["Build REST APIs", "Deploy to cloud"]
 
+    # Relationship to modules
+    modules = relationship("LearningPathModule", back_populates="learning_path", cascade="all, delete-orphan")
+
+
+class LearningPathModule(Base, TimestampMixin):
+    """
+    LearningPathModule: Individual learning modules within a learning path.
+    Each module represents a discrete learning unit (video, article, tutorial, exercise).
+    """
+    __tablename__ = "learning_path_modules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    learning_path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id"), nullable=False)
+
+    # Module ordering and identification
+    order = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    title_zh = Column(String(255))
+    description = Column(Text)
+    description_zh = Column(Text)
+
+    # Content details
+    content_type = Column(String(20), nullable=False)  # 'video', 'article', 'tutorial', 'exercise'
+    content_url = Column(String(512))
+    estimated_minutes = Column(Integer)
+
+    # Requirement and assessment
+    is_required = Column(Boolean, default=True)
+    quiz_data = Column(JSON)  # {"questions": [...], "passing_score": 80}
+
+    # Relationship
+    learning_path = relationship("LearningPath", back_populates="modules")
+
 
 # =============================================================================
 # AGENTIC PLATFORM MODELS
