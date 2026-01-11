@@ -4,7 +4,7 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from shared.database import SessionLocal
 from shared.config import settings
-from shared.models import User
+from shared.models import User, UserRole
 from .repository import UserRepository
 from .schemas import TokenData
 from typing import AsyncGenerator
@@ -32,7 +32,7 @@ async def get_current_user(
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    
+
     repo = UserRepository(db)
     user = await repo.get_by_username(username=token_data.username)
     if user is None:
@@ -44,4 +44,34 @@ async def get_current_active_user(
 ) -> User:
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
+
+async def require_admin(
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """
+    Dependency that requires the current user to have admin role.
+
+    Raises HTTPException with 403 status if user is not an admin.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user
+
+async def require_moderator(
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """
+    Dependency that requires the current user to have moderator or admin role.
+
+    Raises HTTPException with 403 status if user is not a moderator or admin.
+    """
+    if current_user.role not in [UserRole.MODERATOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator privileges required"
+        )
     return current_user
