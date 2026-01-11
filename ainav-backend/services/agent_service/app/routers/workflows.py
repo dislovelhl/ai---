@@ -14,7 +14,7 @@ from shared.database import get_async_session
 from shared.models import AgentWorkflow, User
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from ..core.planner_agent import PlannerAgent, GeneratedGraph
-from ..dependencies import get_current_user_id
+from ..dependencies import get_current_user_id, get_optional_current_user_id
 from ..schemas import (
     WorkflowCreate, WorkflowUpdate, WorkflowResponse,
     WorkflowSummary, PaginatedWorkflowsResponse
@@ -53,7 +53,7 @@ def generate_slug(name: str) -> str:
 async def list_workflows(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    user_id: Optional[UUID] = None,  # TODO: Get from auth
+    user_id: Optional[UUID] = Depends(get_optional_current_user_id),
     is_public: Optional[bool] = None,
     is_template: Optional[bool] = None,
     search: Optional[str] = None,
@@ -61,11 +61,14 @@ async def list_workflows(
 ):
     """
     List agent workflows with optional filtering.
+
+    If authenticated, shows user's workflows + public workflows.
+    If unauthenticated, shows public workflows only.
     """
     query = select(AgentWorkflow)
     count_query = select(func.count(AgentWorkflow.id))
-    
-    # For now, if no user_id provided, show public workflows only
+
+    # If authenticated, show user's workflows + public workflows
     if user_id:
         query = query.where(
             (AgentWorkflow.user_id == user_id) |
