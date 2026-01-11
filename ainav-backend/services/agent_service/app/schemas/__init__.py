@@ -278,3 +278,31 @@ class SkillTestResponse(BaseModel):
     response_data: Any = Field(..., description="Response data from the API")
     execution_time_ms: int = Field(..., description="Execution time in milliseconds")
     error_message: Optional[str] = Field(None, description="Error message if the test failed")
+
+
+# =============================================================================
+# SKILL DOCUMENTATION SCHEMA
+# =============================================================================
+
+class ToolInfo(BaseModel):
+    """Tool information included in skill documentation."""
+    id: UUID
+    name: str
+    name_zh: Optional[str]
+    slug: str
+    description: Optional[str]
+    description_zh: Optional[str]
+    logo_url: Optional[str]
+    url: str
+    pricing_type: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class SkillDocumentationResponse(SkillResponse):
+    """Enhanced skill response with tool information for documentation pages."""
+    tool: ToolInfo
+
+    class Config:
+        from_attributes = True

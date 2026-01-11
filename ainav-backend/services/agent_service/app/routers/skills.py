@@ -17,7 +17,8 @@ from shared.database import get_async_session
 from shared.models import Skill, Tool
 from ..schemas import (
     SkillCreate, SkillUpdate, SkillResponse,
-    PaginatedSkillsResponse, SkillTestRequest, SkillTestResponse
+    PaginatedSkillsResponse, SkillTestRequest, SkillTestResponse,
+    SkillDocumentationResponse
 )
 
 router = APIRouter()
@@ -111,11 +112,38 @@ async def get_skill(
     """
     result = await db.execute(select(Skill).where(Skill.id == skill_id))
     skill = result.scalar_one_or_none()
-    
+
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-    
+
     return SkillResponse.model_validate(skill)
+
+
+@router.get("/{skill_id}/documentation", response_model=SkillDocumentationResponse)
+async def get_skill_documentation(
+    skill_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """
+    Get comprehensive documentation for a skill including tool information.
+
+    This endpoint returns:
+    - Complete skill details (input/output schemas, authentication, pricing)
+    - Code examples in Python and JavaScript
+    - Sample request/response data
+    - Rate limits and usage statistics
+    - Related tool information (name, logo, description, URL)
+
+    Uses eager loading to avoid N+1 queries.
+    """
+    query = select(Skill).options(selectinload(Skill.tool)).where(Skill.id == skill_id)
+    result = await db.execute(query)
+    skill = result.scalar_one_or_none()
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    return SkillDocumentationResponse.model_validate(skill)
 
 
 @router.post("", response_model=SkillResponse, status_code=201)
