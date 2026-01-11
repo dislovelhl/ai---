@@ -4,7 +4,9 @@ from ..clients.deepseek import DeepSeekClient
 from ..clients.github import GitHubClient
 from ..clients.github_trending import GitHubTrendingClient
 from ..clients.arxiv_miner import ArXivMiner
-from shared.models import Tool, Category
+from ..utils.duplicate_detector import DuplicateDetector
+from ..utils.category_mapper import CategoryMapper
+from shared.models import Tool, Category, CrawledContent
 from shared.config import settings
 from shared.embedding import embedding_service
 from shared.chinese_synonyms import get_synonym_pairs
@@ -28,21 +30,23 @@ def crawl_and_enrich_daily():
 async def _crawl_and_enrich_pipeline():
     ph_client = ProductHuntClient()
     ds_client = DeepSeekClient()
-    
+    duplicate_detector = DuplicateDetector(fuzzy_threshold=0.85)
+
     logger.info("Starting daily PH crawl...")
     ph_tools = await ph_client.get_daily_ai_tools()
-    
+
     if not ph_tools:
         logger.warning("No tools found on Product Hunt today.")
         return {"status": "no_tools_found"}
 
     new_tools_count = 0
+    skipped_duplicates = 0
     async with AsyncSessionLocal() as session:
         # Get a default category or create it
         cat_query = select(Category).where(Category.slug == "ai-tools")
         result = await session.execute(cat_query)
         category = result.scalar_one_or_none()
-        
+
         if not category:
             category = Category(name="AI Tools", slug="ai-tools", description="Automatically discovered AI tools")
             session.add(category)
@@ -51,45 +55,59 @@ async def _crawl_and_enrich_pipeline():
 
         for edge in ph_tools:
             node = edge["node"]
-            
+
             # 2026 Strategy: Filter for high quality (votes > 100)
             if node.get("votesCount", 0) < 100:
                 logger.info(f"Skipping {node['name']} (Votes: {node['votesCount']})")
                 continue
-                
-            slug = node["name"].lower().replace(" ", "-") # Simple slugify
-            
-            # Check if exists
-            tool_query = select(Tool).where(Tool.slug == slug)
-            tool_result = await session.execute(tool_query)
-            if tool_result.scalar_one_or_none():
+
+            tool_url = node["website"] or node["url"]
+            tool_name = node["name"]
+
+            # Check for duplicates using DuplicateDetector
+            duplicates = await duplicate_detector.find_duplicates(
+                session=session,
+                name=tool_name,
+                url=tool_url,
+                check_fuzzy=True
+            )
+
+            if duplicates:
+                logger.info(
+                    f"Skipping duplicate from ProductHunt: {tool_name} - "
+                    f"Found {len(duplicates)} match(es): "
+                    f"{', '.join([f'{d['name']} ({d['match_type']})' for d in duplicates])}"
+                )
+                skipped_duplicates += 1
                 continue
-            
+
             logger.info(f"Enriching new tool: {node['name']} (Votes: {node['votesCount']})")
             # Enrich with DeepSeek
             enrichment = await ds_client.enrich_tool_info(node["name"], node["tagline"])
-            
+
             if enrichment:
+                slug = node["name"].lower().replace(" ", "-")  # Simple slugify
                 new_tool = Tool(
                     name=node["name"],
                     name_zh=enrichment.get("name_zh"),
                     slug=slug,
                     description=node["tagline"],
                     description_zh=enrichment.get("description_zh"),
-                    url=node["website"] or node["url"],
+                    url=tool_url,
                     category_id=category.id,
                     pricing_type=enrichment.get("pricing_type", "free")
                 )
                 session.add(new_tool)
                 new_tools_count += 1
-        
+
         await session.commit()
-    
+
     if new_tools_count > 0:
         logger.info(f"Added {new_tools_count} new tools. Triggering Meilisearch sync...")
         sync_to_meilisearch.delay()
-    
-    return {"status": "success", "added": new_tools_count}
+
+    logger.info(f"ProductHunt crawl complete: {new_tools_count} added, {skipped_duplicates} duplicates skipped")
+    return {"status": "success", "added": new_tools_count, "skipped_duplicates": skipped_duplicates}
 
 @celery_app.task(name="crawl_github_trending_daily")
 def crawl_github_trending_daily():
@@ -99,53 +117,120 @@ def crawl_github_trending_daily():
 async def _crawl_github_trending_pipeline():
     gt_client = GitHubTrendingClient()
     ds_client = DeepSeekClient()
-    
+    duplicate_detector = DuplicateDetector(fuzzy_threshold=0.85)
+    category_mapper = CategoryMapper()
+
     logger.info("Starting GitHub Trending crawl...")
     repos = await gt_client.get_trending_repos()
-    
-    new_tools_count = 0
-    async with AsyncSessionLocal() as session:
-        cat_query = select(Category).where(Category.slug == "open-source")
-        result = await session.execute(cat_query)
-        category = result.scalar_one_or_none()
-        
-        if not category:
-            category = Category(name="Open Source", slug="open-source", description="Open Source AI projects")
-            session.add(category)
-            await session.commit()
-            await session.refresh(category)
 
+    new_content_count = 0
+    skipped_duplicates = 0
+    skipped_low_confidence = 0
+
+    async with AsyncSessionLocal() as session:
         for repo in repos:
-            slug = repo["name"].lower().replace(" ", "-")
-            tool_query = select(Tool).where(Tool.slug == slug)
-            tool_result = await session.execute(tool_query)
-            if tool_result.scalar_one_or_none():
+            repo_url = repo["url"]
+            repo_name = repo["name"]
+            repo_full_name = repo["full_name"]
+
+            # Check for duplicates using DuplicateDetector
+            duplicates = await duplicate_detector.find_duplicates(
+                session=session,
+                name=repo_name,
+                url=repo_url,
+                check_fuzzy=True
+            )
+
+            if duplicates:
+                logger.info(
+                    f"Skipping duplicate from GitHub: {repo_name} - "
+                    f"Found {len(duplicates)} match(es): "
+                    f"{', '.join([f'{d['name']} ({d['match_type']})' for d in duplicates])}"
+                )
+                skipped_duplicates += 1
                 continue
 
-            logger.info(f"Enriching new GitHub tool: {repo['full_name']}")
-            enrichment = await ds_client.enrich_tool_info(repo["name"], repo["description"])
-            
-            if enrichment:
-                new_tool = Tool(
-                    name=repo["name"],
-                    name_zh=enrichment.get("name_zh"),
-                    slug=slug,
-                    description=repo["description"],
-                    description_zh=enrichment.get("description_zh"),
-                    url=repo["url"],
-                    category_id=category.id,
-                    pricing_type="open_source",
-                    github_stars=repo.get("stars_today", 0)
+            logger.info(f"Enriching new GitHub tool: {repo_full_name}")
+            enrichment = await ds_client.enrich_tool_info(repo_name, repo["description"])
+
+            if not enrichment:
+                logger.warning(f"Failed to enrich {repo_name}, skipping")
+                continue
+
+            # Check if it's actually an AI tool based on LLM confidence
+            is_ai_tool = enrichment.get("is_ai_tool", True)
+            ai_tool_confidence = enrichment.get("ai_tool_confidence", 0.0)
+
+            # Skip if LLM is confident this is NOT an AI tool (confidence > 0.7 that it's not AI)
+            if not is_ai_tool and ai_tool_confidence > 0.7:
+                logger.info(
+                    f"Skipping {repo_name} - LLM determined it's not an AI tool "
+                    f"(confidence: {ai_tool_confidence:.2f})"
                 )
-                session.add(new_tool)
-                new_tools_count += 1
-        
+                skipped_low_confidence += 1
+                continue
+
+            # Map suggested category to database category
+            suggested_category = enrichment.get("suggested_category", "productivity")
+            category_confidence = enrichment.get("category_confidence", 0.0)
+
+            # Calculate overall AI confidence score (combine crawler's AI score with LLM confidence)
+            crawler_ai_score = repo.get("ai_score", 0.0)
+            overall_confidence = (crawler_ai_score * 0.4 + ai_tool_confidence * 0.6) if is_ai_tool else crawler_ai_score * 0.5
+
+            logger.info(
+                f"Creating CrawledContent for {repo_name}: "
+                f"category={suggested_category} (confidence: {category_confidence:.2f}), "
+                f"AI confidence: {overall_confidence:.2f}"
+            )
+
+            # Prepare metadata JSON with all GitHub-specific information
+            metadata = {
+                "full_name": repo_full_name,
+                "stars_today": repo.get("stars_today", 0),
+                "topics": repo.get("topics", []),
+                "language": repo.get("language", ""),
+                "has_readme": repo.get("has_readme", False),
+                "ai_score": crawler_ai_score,
+                "is_ai_tool": is_ai_tool,
+                "ai_tool_confidence": ai_tool_confidence,
+                "category_confidence": category_confidence,
+                "enrichment": {
+                    "name_zh": enrichment.get("name_zh"),
+                    "description_zh": enrichment.get("description_zh"),
+                    "tags": enrichment.get("tags", []),
+                    "summary": enrichment.get("summary")
+                }
+            }
+
+            # Create CrawledContent entry for admin review
+            crawled_content = CrawledContent(
+                source="github",
+                name=repo_name,
+                description=repo["description"] or f"Trending GitHub repository: {repo_full_name}",
+                url=repo_url,
+                meta_data=metadata,
+                suggested_category=suggested_category,
+                suggested_pricing="open_source",  # GitHub repos are open source
+                ai_confidence_score=overall_confidence,
+                status="pending"
+            )
+            session.add(crawled_content)
+            new_content_count += 1
+
         await session.commit()
-    
-    if new_tools_count > 0:
-        sync_to_meilisearch.delay()
-    
-    return {"status": "success", "added": new_tools_count}
+
+    logger.info(
+        f"GitHub crawl complete: {new_content_count} added to review queue, "
+        f"{skipped_duplicates} duplicates skipped, "
+        f"{skipped_low_confidence} non-AI tools filtered"
+    )
+    return {
+        "status": "success",
+        "added": new_content_count,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_low_confidence": skipped_low_confidence
+    }
 
 @celery_app.task(name="mine_arxiv_papers_daily")
 def mine_arxiv_papers_daily():
@@ -155,16 +240,18 @@ def mine_arxiv_papers_daily():
 async def _mine_arxiv_papers_pipeline():
     arxiv_miner = ArXivMiner()
     ds_client = DeepSeekClient()
-    
+    duplicate_detector = DuplicateDetector(fuzzy_threshold=0.85)
+
     logger.info("Starting ArXiv paper mining...")
     papers = await arxiv_miner.get_latest_papers()
-    
+
     new_tools_count = 0
+    skipped_duplicates = 0
     async with AsyncSessionLocal() as session:
         cat_query = select(Category).where(Category.slug == "research")
         result = await session.execute(cat_query)
         category = result.scalar_one_or_none()
-        
+
         if not category:
             category = Category(name="Research", slug="research", description="AI Research Papers & Models")
             session.add(category)
@@ -172,35 +259,51 @@ async def _mine_arxiv_papers_pipeline():
             await session.refresh(category)
 
         for paper in papers:
-            slug = f"arxiv-{paper['url'].split('/')[-1].replace('.', '-')}"
-            tool_query = select(Tool).where(Tool.slug == slug)
-            tool_result = await session.execute(tool_query)
-            if tool_result.scalar_one_or_none():
+            paper_url = paper["url"]
+            paper_name = paper["name"]
+
+            # Check for duplicates using DuplicateDetector
+            duplicates = await duplicate_detector.find_duplicates(
+                session=session,
+                name=paper_name,
+                url=paper_url,
+                check_fuzzy=True
+            )
+
+            if duplicates:
+                logger.info(
+                    f"Skipping duplicate from ArXiv: {paper_name} - "
+                    f"Found {len(duplicates)} match(es): "
+                    f"{', '.join([f'{d['name']} ({d['match_type']})' for d in duplicates])}"
+                )
+                skipped_duplicates += 1
                 continue
 
             logger.info(f"Enriching new paper: {paper['name']}")
             enrichment = await ds_client.enrich_tool_info(paper["name"], paper["description"])
-            
+
             if enrichment:
+                slug = f"arxiv-{paper['url'].split('/')[-1].replace('.', '-')}"
                 new_tool = Tool(
                     name=paper["name"],
                     name_zh=enrichment.get("name_zh"),
                     slug=slug,
-                    description=paper["description"][:500], # Summary might be long
+                    description=paper["description"][:500],  # Summary might be long
                     description_zh=enrichment.get("description_zh"),
-                    url=paper["url"],
+                    url=paper_url,
                     category_id=category.id,
                     pricing_type="free"
                 )
                 session.add(new_tool)
                 new_tools_count += 1
-        
+
         await session.commit()
-    
+
     if new_tools_count > 0:
         sync_to_meilisearch.delay()
-    
-    return {"status": "success", "added": new_tools_count}
+
+    logger.info(f"ArXiv crawl complete: {new_tools_count} added, {skipped_duplicates} duplicates skipped")
+    return {"status": "success", "added": new_tools_count, "skipped_duplicates": skipped_duplicates}
 
 @celery_app.task(name="sync_github_stats")
 def sync_github_stats():

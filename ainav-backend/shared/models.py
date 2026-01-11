@@ -6,6 +6,12 @@ from sqlalchemy.sql import func
 import uuid
 import enum
 
+# Conditional import for pgvector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
+
 Base = declarative_base()
 
 
@@ -484,8 +490,7 @@ class AgentMemory(Base, TimestampMixin):
     
     # Vector embedding for semantic search
     # Using 384 dimensions for MiniLM-L12-v2
-    from pgvector.sqlalchemy import Vector
-    embedding = Column(Vector(384))
+    embedding = Column(Vector(384)) if Vector is not None else None
 
 
 class UserInteraction(Base, TimestampMixin):
