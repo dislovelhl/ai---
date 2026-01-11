@@ -477,17 +477,17 @@ class AgentMemory(Base, TimestampMixin):
     Uses pgvector for semantic search.
     """
     __tablename__ = "agent_memories"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workflow_id = Column(UUID(as_uuid=True), ForeignKey("agent_workflows.id"), nullable=False)
-    
+
     # Memory content
     content = Column(Text, nullable=False)
     content_type = Column(String(50))  # 'conversation', 'document', 'fact', 'summary'
-    
+
     # Metadata for filtering
     meta_data = Column(JSON)  # Flexible metadata (source, timestamp, tags, etc.)
-    
+
     # Vector embedding for semantic search
     # Using 384 dimensions for MiniLM-L12-v2
     embedding = Column(Vector(384)) if Vector is not None else None
